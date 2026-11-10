@@ -1,28 +1,37 @@
 # HUD Overlay
 
-Native Android overlay application built with Kotlin.
+Aplikasi overlay Android (Kotlin + Jetpack Compose) untuk live streaming.
 
-## Current foundation
-- Separate Portrait and Landscape HUD profiles.
-- Basic text HUD editor with position and opacity controls.
-- Foreground overlay service.
-- Touch-through overlay window so game controls receive taps.
-- Persistent notification with Pause, Resume, and Stop actions.
-- GitHub Actions debug APK build.
+## Fitur saat ini
+
+- Editor overlay: geser teks, atur ukuran, opacity, warna, dan urutan layer.
+- Profil Portrait dan Landscape terpisah.
+- Overlay tembus sentuhan (tap tetap sampai ke game).
+- Perubahan di editor langsung terlihat di overlay yang sedang aktif.
+- Notifikasi dengan aksi Jeda / Lanjut / Stop.
+- Build APK debug lewat GitHub Actions.
 
 ## Build
-Push to `main` or run the **Android APK Build** workflow manually. The debug APK is uploaded as the `hud-overlay-debug-apk` artifact.
 
-## Android permissions
-The app requires the user to grant **Display over other apps**. Android 13+ also asks for notification permission.
+Push ke `main` atau jalankan workflow **Android APK Build** manual (pilih branch yang diinginkan).
+APK debug diunggah sebagai artifact `hud-overlay-debug-apk`.
+Lokal / Codespaces: `gradle assembleDebug`.
+
+## Izin
+
+- **Tampil di atas aplikasi lain** (wajib).
+- Notifikasi (Android 13+).
+
+## Catatan
+
+Di Android 12+, overlay tembus sentuhan dibatasi opacity jendela maksimal 0.8,
+jadi tampilannya sedikit lebih redup. Visibilitas overlay di hasil capture beda-beda
+per versi Android dan vendor. Tes di HP target sebelum live.
 
 ## Roadmap
-- Image/JPG/PNG/GIF overlay picker.
-- MP3 playlist with repeat and background playback.
-- Video overlay and playback controls.
-- Web overlay.
-- Multi-layer HUD editor and saved presets.
-- MediaProjection recording/capture compatibility testing.
 
-## Important
-Android touch-through behavior and capture visibility vary by Android version and device vendor. Test on the target device before relying on it during a live stream.
+- Overlay gambar/GIF
+- Web overlay
+- Preset layout
+- Video dan MP3
+- Uji kompatibilitas MediaProjection
