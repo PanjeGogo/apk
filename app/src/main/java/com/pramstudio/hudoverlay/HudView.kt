@@ -1,45 +1,132 @@
 package com.pramstudio.hudoverlay
 
 import android.content.Context
+import android.graphics.drawable.AnimatedImageDrawable
 import android.util.TypedValue
+import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.TextView
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** Menggambar semua elemen HUD memakai posisi pecahan (0..1) dari ukuran layar. */
+/**
+ * Menggambar semua elemen overlay (teks dan gambar/GIF) dengan posisi pecahan layar.
+ * View dipakai ulang antar update supaya animasi GIF tidak restart tiap kali editor menyimpan.
+ */
 class HudView(context: Context) : FrameLayout(context) {
 
-    private var current: List<HudItem> = emptyList()
+    private class Cached(val sig: String, val view: View)
+
+    private class Entry(val item: HudItem, val view: View)
+
+    private val cache = HashMap<Long, Cached>()
+    private var entries: List<Entry> = emptyList()
 
     fun setItems(items: List<HudItem>) {
-        current = items
+        val keep = items.map { it.id }.toSet()
+        val iter = cache.entries.iterator()
+        while (iter.hasNext()) {
+            val e = iter.next()
+            if (e.key !in keep) {
+                release(e.value.view)
+                iter.remove()
+            }
+        }
+
         removeAllViews()
-        items.forEach { item ->
-            val tv = TextView(context)
-            tv.text = item.text
-            tv.setTextColor(item.color)
-            tv.alpha = item.alpha
+        val list = ArrayList<Entry>()
+        for (item in items) {
+            val sig = if (item.type == ItemType.IMAGE) "I|" + item.path else "T"
+            val existing = cache[item.id]
+            val cached: Cached
+            if (existing != null && existing.sig == sig) {
+                cached = existing
+            } else {
+                if (existing != null) release(existing.view)
+                val v = createView(item)
+                if (v == null) {
+                    cache.remove(item.id)
+                    continue
+                }
+                cached = Cached(sig, v)
+                cache[item.id] = cached
+            }
+            style(cached.view, item)
             addView(
-                tv,
+                cached.view,
                 FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 )
             )
+            list.add(Entry(item, cached.view))
         }
+        entries = list
         requestLayout()
+    }
+
+    /** Hentikan animasi dan bersihkan semua elemen. */
+    fun clear() {
+        cache.values.forEach { release(it.view) }
+        cache.clear()
+        entries = emptyList()
+        removeAllViews()
+    }
+
+    private fun createView(item: HudItem): View? {
+        if (item.type == ItemType.TEXT) return TextView(context)
+        val drawable = Media.decodeDrawable(item.path) ?: return null
+        val iv = ImageView(context)
+        iv.scaleType = ImageView.ScaleType.FIT_XY
+        iv.setImageDrawable(drawable)
+        if (drawable is AnimatedImageDrawable) {
+            drawable.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE
+            drawable.start()
+        }
+        return iv
+    }
+
+    private fun style(v: View, item: HudItem) {
+        if (v is TextView) {
+            v.text = item.text
+            v.setTextColor(item.color)
+        }
+        v.alpha = item.alpha
+    }
+
+    private fun release(v: View) {
+        if (v is ImageView) {
+            val d = v.drawable
+            if (d is AnimatedImageDrawable) d.stop()
+        }
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val w = MeasureSpec.getSize(widthMeasureSpec)
         val h = MeasureSpec.getSize(heightMeasureSpec)
         val minSide = min(w, h).toFloat()
-        for (i in 0 until childCount) {
-            val tv = getChildAt(i) as TextView
-            tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, current[i].size * minSide)
-            tv.measure(MeasureSpec.UNSPECIFIED, MeasureSpec.UNSPECIFIED)
+        for (e in entries) {
+            val v = e.view
+            if (v is TextView) {
+                v.setTextSize(TypedValue.COMPLEX_UNIT_PX, e.item.size * minSide)
+                v.measure(MeasureSpec.UNSPECIFIED, MeasureSpec.UNSPECIFIED)
+            } else if (v is ImageView) {
+                val d = v.drawable
+                val iw = d?.intrinsicWidth ?: 0
+                val ih = d?.intrinsicHeight ?: 0
+                val tw = (e.item.size * minSide).roundToInt().coerceAtLeast(1)
+                val th = if (iw > 0 && ih > 0) {
+                    (tw.toFloat() * ih / iw).roundToInt().coerceAtLeast(1)
+                } else {
+                    tw
+                }
+                v.measure(
+                    MeasureSpec.makeMeasureSpec(tw, MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(th, MeasureSpec.EXACTLY)
+                )
+            }
         }
         setMeasuredDimension(w, h)
     }
@@ -47,11 +134,10 @@ class HudView(context: Context) : FrameLayout(context) {
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         val w = right - left
         val h = bottom - top
-        for (i in 0 until childCount) {
-            val v = getChildAt(i)
-            val l = (current[i].x * w).roundToInt()
-            val t = (current[i].y * h).roundToInt()
-            v.layout(l, t, l + v.measuredWidth, t + v.measuredHeight)
+        for (e in entries) {
+            val l = (e.item.x * w).roundToInt()
+            val t = (e.item.y * h).roundToInt()
+            e.view.layout(l, t, l + e.view.measuredWidth, t + e.view.measuredHeight)
         }
     }
 }

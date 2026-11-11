@@ -27,6 +27,11 @@ class OverlayService : Service() {
         const val ACTION_PAUSE = "com.pramstudio.hudoverlay.PAUSE"
         const val ACTION_RESUME = "com.pramstudio.hudoverlay.RESUME"
         const val ACTION_STOP = "com.pramstudio.hudoverlay.STOP"
+        const val ACTION_MUSIC_TOGGLE = "com.pramstudio.hudoverlay.MUSIC_TOGGLE"
+        const val ACTION_MUSIC_NEXT = "com.pramstudio.hudoverlay.MUSIC_NEXT"
+        const val ACTION_MUSIC_PREV = "com.pramstudio.hudoverlay.MUSIC_PREV"
+        const val ACTION_MUSIC_PLAY_INDEX = "com.pramstudio.hudoverlay.MUSIC_PLAY_INDEX"
+        private const val EXTRA_INDEX = "index"
         private const val CHANNEL_ID = "hud_overlay"
         private const val NOTIF_ID = 1
 
@@ -40,15 +45,29 @@ class OverlayService : Service() {
         fun stop(ctx: Context) {
             ctx.stopService(Intent(ctx, OverlayService::class.java))
         }
+
+        /** Kontrol musik. Kalau service belum jalan, service (dan overlay) ikut dinyalakan. */
+        fun sendMusic(ctx: Context, action: String, index: Int = 0) {
+            val intent = Intent(ctx, OverlayService::class.java)
+                .setAction(action)
+                .putExtra(EXTRA_INDEX, index)
+            ContextCompat.startForegroundService(ctx, intent)
+        }
     }
 
     private lateinit var windowManager: WindowManager
+    private lateinit var music: MusicPlayer
     private var hud: HudView? = null
     private var paused = false
 
-    // Editor menyimpan layout -> overlay yang sedang aktif langsung ikut berubah.
+    // Editor dan layar musik menyimpan ke prefs -> service langsung ikut berubah.
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-        if (key == HudStore.KEY_LAYOUT) refresh()
+        when (key) {
+            HudStore.KEY_LAYOUT -> refresh()
+            MusicStore.KEY_TRACKS -> music.onTracksChanged()
+            MusicStore.KEY_VOLUME -> music.applyVolume()
+            else -> {}
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -57,6 +76,7 @@ class OverlayService : Service() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         createChannel()
+        music = MusicPlayer(this) { updateNotification() }
         startForegroundCompat()
         addOverlay()
         HudStore.prefs(this).registerOnSharedPreferenceChangeListener(prefListener)
@@ -67,6 +87,12 @@ class OverlayService : Service() {
             ACTION_PAUSE -> setPaused(true)
             ACTION_RESUME -> setPaused(false)
             ACTION_STOP -> stopSelf()
+            ACTION_MUSIC_TOGGLE -> music.toggle()
+            ACTION_MUSIC_NEXT -> music.next()
+            ACTION_MUSIC_PREV -> music.prev()
+            ACTION_MUSIC_PLAY_INDEX ->
+                music.playIndex(intent?.getIntExtra(EXTRA_INDEX, 0) ?: 0)
+            else -> {}
         }
         return START_NOT_STICKY
     }
@@ -78,7 +104,9 @@ class OverlayService : Service() {
 
     override fun onDestroy() {
         HudStore.prefs(this).unregisterOnSharedPreferenceChangeListener(prefListener)
+        music.release()
         hud?.let {
+            it.clear()
             try {
                 windowManager.removeView(it)
             } catch (e: Exception) {
@@ -110,10 +138,8 @@ class OverlayService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             params.alpha = 0.8f
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            params.layoutInDisplayCutoutMode =
-                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-        }
+        params.layoutInDisplayCutoutMode =
+            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         try {
             windowManager.addView(view, params)
             hud = view
@@ -135,6 +161,10 @@ class OverlayService : Service() {
     private fun setPaused(value: Boolean) {
         paused = value
         hud?.visibility = if (paused) View.GONE else View.VISIBLE
+        updateNotification()
+    }
+
+    private fun updateNotification() {
         getSystemService(NotificationManager::class.java).notify(NOTIF_ID, buildNotification())
     }
 
@@ -148,7 +178,12 @@ class OverlayService : Service() {
     private fun startForegroundCompat() {
         val n = buildNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            startForeground(
+                NOTIF_ID,
+                n,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            )
         } else {
             startForeground(NOTIF_ID, n)
         }
@@ -172,10 +207,14 @@ class OverlayService : Service() {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE
         )
+        val musicPlaying = ::music.isInitialized && music.isPlaying
         val b = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setContentTitle("HUD Overlay")
-            .setContentText(if (paused) "Dijeda" else "Aktif")
+            .setContentText(
+                (if (paused) "Overlay dijeda" else "Overlay aktif") +
+                    (if (musicPlaying) " - musik diputar" else "")
+            )
             .setContentIntent(open)
             .setOngoing(true)
         if (paused) {
@@ -183,6 +222,9 @@ class OverlayService : Service() {
         } else {
             b.addAction(serviceAction("Jeda", ACTION_PAUSE))
         }
+        b.addAction(
+            serviceAction(if (musicPlaying) "Jeda musik" else "Putar musik", ACTION_MUSIC_TOGGLE)
+        )
         b.addAction(serviceAction("Stop", ACTION_STOP))
         return b.build()
     }
