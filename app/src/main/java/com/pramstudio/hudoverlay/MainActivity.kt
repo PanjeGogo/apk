@@ -10,24 +10,35 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 
 class MainActivity : ComponentActivity() {
 
@@ -41,40 +52,78 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.statusBarColor = Ui.OrangeDark.toArgb()
+        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
+
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
-                Surface(Modifier.fillMaxSize()) {
-                    val running by OverlayService.running.collectAsState()
-                    val initial = remember { HudStore.load(this@MainActivity) }
+            HudTheme {
+                val running by OverlayService.running.collectAsState()
+                var tab by remember { mutableStateOf(0) }
+                var profile by remember { mutableStateOf(Profile.PORTRAIT) }
+                var showInfo by remember { mutableStateOf(false) }
 
-                    Column(
-                        Modifier
-                            .fillMaxSize()
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (!canDraw) {
-                            Text("Izin \"Tampil di atas aplikasi lain\" belum aktif.")
-                            Button(
-                                onClick = { openOverlaySettings() },
-                                modifier = Modifier.fillMaxWidth()
-                            ) { Text("Buka pengaturan izin") }
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Ui.Bg)
+                ) {
+                    TopBar(running) {
+                        if (running) {
+                            OverlayService.stop(this@MainActivity)
+                        } else if (!canDraw) {
+                            showInfo = true
                         } else {
-                            Button(
-                                onClick = {
-                                    if (running) OverlayService.stop(this@MainActivity)
-                                    else requestStart()
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) { Text(if (running) "Stop overlay" else "Mulai overlay") }
+                            requestStart()
                         }
-
-                        EditorScreen(
-                            initial = initial,
-                            onSave = { HudStore.save(this@MainActivity, it) },
-                            modifier = Modifier.weight(1f)
-                        )
                     }
+                    TabBar(tab) { tab = it }
+                    if (!canDraw) {
+                        PermissionBanner { showInfo = true }
+                    }
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    ) {
+                        if (tab == 0) {
+                            EditorScreen(
+                                profile = profile,
+                                onProfileChange = { profile = it },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            MusicScreen(
+                                canDraw = canDraw,
+                                onNeedPermission = { showInfo = true },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                }
+
+                if (showInfo) {
+                    AlertDialog(
+                        onDismissRequest = { showInfo = false },
+                        title = { Text("Izin tampil di atas aplikasi lain") },
+                        text = {
+                            Text(
+                                "Izin ini hanya dipakai untuk menampilkan teks dan gambar overlay " +
+                                    "di atas game atau app lain. App ini tidak membaca layar, sentuhan, " +
+                                    "atau isi aplikasi lain. Di halaman berikutnya Android akan " +
+                                    "menampilkan peringatan umum. Itu peringatan standar untuk semua " +
+                                    "app overlay."
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                showInfo = false
+                                openOverlaySettings()
+                            }) { Text("Lanjut") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showInfo = false }) { Text("Batal") }
+                        }
+                    )
                 }
             }
         }
@@ -100,5 +149,90 @@ class MainActivity : ComponentActivity() {
         } else {
             OverlayService.start(this)
         }
+    }
+}
+
+@Composable
+private fun TopBar(running: Boolean, onToggle: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Ui.Orange)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("HUD Overlay", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+            Text(
+                if (running) "Overlay aktif" else "Overlay mati",
+                color = Color(0xCCFFFFFF),
+                fontSize = 12.sp
+            )
+        }
+        Box(
+            Modifier
+                .clip(RoundedCornerShape(50))
+                .background(Color.White)
+                .clickable(onClick = onToggle)
+                .padding(horizontal = 24.dp, vertical = 10.dp)
+        ) {
+            Text(
+                if (running) "Stop" else "Mulai",
+                color = if (running) Color(0xFFD32F2F) else Ui.OrangeDark,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+private fun TabBar(selected: Int, onSelect: (Int) -> Unit) {
+    val labels = listOf("Editor", "Musik")
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Color.White)
+    ) {
+        labels.forEachIndexed { i, label ->
+            Column(
+                Modifier
+                    .weight(1f)
+                    .clickable { onSelect(i) },
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    label,
+                    color = if (i == selected) Ui.OrangeDark else Ui.Muted,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(if (i == selected) Ui.Orange else Color.Transparent)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PermissionBanner(onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Ui.OrangeSoft)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            "Izin overlay belum aktif. Ketuk untuk mengaktifkan.",
+            color = Ui.OrangeDark,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
