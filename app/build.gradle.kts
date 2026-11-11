@@ -9,7 +9,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.pramstudio.hudoverlay"
+        applicationId = "com.PanjeGoGo.AppOverlay"
         minSdk = 28
         targetSdk = 34
         versionCode = 4
