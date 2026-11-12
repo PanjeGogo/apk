@@ -123,7 +123,10 @@ class HudView(context: Context) : FrameLayout(context) {
             v.text = item.text
             v.setTextColor(item.color)
         }
-        v.alpha = item.alpha
+        // Alpha hanya diterapkan ke teks/gambar. Alpha pada WebView akan
+        // ikut memudarkan seluruh halaman (termasuk teks alert), bukan
+        // membuat area di luar konten halaman menjadi transparan.
+        v.alpha = if (v is WebView) 1f else item.alpha
     }
 
     private fun release(v: View) {
