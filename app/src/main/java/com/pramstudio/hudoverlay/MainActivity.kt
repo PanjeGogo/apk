@@ -61,6 +61,14 @@ class MainActivity : ComponentActivity() {
                 var tab by remember { mutableStateOf(0) }
                 var profile by remember { mutableStateOf(Profile.PORTRAIT) }
                 var showInfo by remember { mutableStateOf(false) }
+                var showPatchNotes by remember { mutableStateOf(false) }
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    val prefs = HudStore.prefs(this@MainActivity)
+                    if (prefs.getString("shown_patch_version", "") != "2.1.0") {
+                        prefs.edit().putString("shown_patch_version", "2.1.0").apply()
+                        showPatchNotes = true
+                    }
+                }
 
                 Column(
                     Modifier
@@ -101,13 +109,24 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                if (showPatchNotes) {
+                    AlertDialog(
+                        onDismissRequest = { showPatchNotes = false },
+                        title = { Text("Overlay aja v2.1.0") },
+                        text = {
+                            Text("• Web Overlay dengan JavaScript aktif\n• Background WebView transparan untuk alert donasi\n• Sentuhan tetap diteruskan ke game\n• URL alert dapat diatur dari editor\n• Teks dan gambar/GIF tetap tersedia")
+                        },
+                        confirmButton = { TextButton(onClick = { showPatchNotes = false }) { Text("Mengerti") } }
+                    )
+                }
+
                 if (showInfo) {
                     AlertDialog(
                         onDismissRequest = { showInfo = false },
                         title = { Text("Izin tampil di atas aplikasi lain") },
                         text = {
                             Text(
-                                "Izin ini hanya dipakai untuk menampilkan teks dan gambar overlay " +
+                                "Izin ini hanya dipakai untuk menampilkan teks, gambar, dan halaman web overlay " +
                                     "di atas game atau app lain. App ini tidak membaca layar, sentuhan, " +
                                     "atau isi aplikasi lain. Di halaman berikutnya Android akan " +
                                     "menampilkan peringatan umum. Itu peringatan standar untuk semua " +
@@ -162,7 +181,7 @@ private fun TopBar(running: Boolean, onToggle: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            Text("HUD Overlay", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+            Text("Overlay aja", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
             Text(
                 if (running) "Overlay aktif" else "Overlay mati",
                 color = Color(0xCCFFFFFF),

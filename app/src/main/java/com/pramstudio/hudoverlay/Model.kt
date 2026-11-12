@@ -8,7 +8,7 @@ import org.json.JSONObject
 
 enum class Profile { PORTRAIT, LANDSCAPE }
 
-enum class ItemType { TEXT, IMAGE }
+enum class ItemType { TEXT, IMAGE, WEB }
 
 /**
  * Satu elemen overlay (teks atau gambar/GIF).
@@ -23,6 +23,7 @@ data class HudItem(
     val type: ItemType = ItemType.TEXT,
     val text: String = "",
     val path: String = "",
+    val url: String = "",
     val x: Float,
     val y: Float,
     val size: Float,
@@ -85,6 +86,7 @@ object HudStore {
                     .put("type", it.type.name)
                     .put("text", it.text)
                     .put("path", it.path)
+                    .put("url", it.url)
                     .put("x", it.x.toDouble())
                     .put("y", it.y.toDouble())
                     .put("size", it.size.toDouble())
@@ -109,6 +111,7 @@ object HudStore {
                 type = type,
                 text = o.optString("text", ""),
                 path = o.optString("path", ""),
+                url = o.optString("url", ""),
                 x = o.getDouble("x").toFloat(),
                 y = o.getDouble("y").toFloat(),
                 size = o.getDouble("size").toFloat(),

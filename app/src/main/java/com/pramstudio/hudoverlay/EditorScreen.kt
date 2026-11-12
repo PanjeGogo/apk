@@ -82,6 +82,9 @@ fun EditorScreen(
     var selectedId by remember { mutableStateOf<Long?>(null) }
     var editing by remember { mutableStateOf(false) }
     var replaceId by remember { mutableStateOf<Long?>(null) }
+    var webDialog by remember { mutableStateOf(false) }
+    var webUrl by remember { mutableStateOf("https://") }
+    var webEditId by remember { mutableStateOf<Long?>(null) }
 
     // Simpan dengan jeda singkat supaya tidak menulis tiap frame saat menggeser,
     // dan simpan sekali lagi saat layar ditutup (misalnya pindah tab).
@@ -121,6 +124,21 @@ fun EditorScreen(
             size = 0.06f,
             alpha = 1f,
             color = 0xFFFFFFFF.toInt()
+        )
+        layout = layout.withItems(profile, layout.items(profile) + item)
+        selectedId = item.id
+    }
+
+    fun addWeb(url: String) {
+        val clean = url.trim()
+        val address = if (clean.startsWith("http://", true) || clean.startsWith("https://", true)) clean else "https://$clean"
+        val parsed = android.net.Uri.parse(address)
+        if (parsed.host.isNullOrBlank() || parsed.scheme !in listOf("http", "https")) return
+        val n = layout.items(profile).size
+        val item = HudItem(
+            id = System.nanoTime(), type = ItemType.WEB, url = address,
+            x = 0.08f + 0.03f * (n % 5), y = 0.18f + 0.05f * (n % 5),
+            size = 0.48f, alpha = 1f, color = 0xFFFFFFFF.toInt()
         )
         layout = layout.withItems(profile, layout.items(profile) + item)
         selectedId = item.id
@@ -266,6 +284,11 @@ fun EditorScreen(
                         modifier = Modifier.weight(1f)
                     )
                 }
+                SoftChip("+ Web Overlay", onClick = {
+                    webEditId = null
+                    webUrl = "https://"
+                    webDialog = true
+                })
 
                 if (selected == null) {
                     Text(
@@ -275,6 +298,7 @@ fun EditorScreen(
                     )
                 } else {
                     val isText = selected.type == ItemType.TEXT
+                    val isWeb = selected.type == ItemType.WEB
 
                     if (isText) {
                         SectionLabel("Teks")
@@ -309,6 +333,15 @@ fun EditorScreen(
                                 )
                             }
                         }
+                    } else if (isWeb) {
+                        SectionLabel("Web Overlay")
+                        Text(selected.url, color = Ui.Ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        SoftChip("Ubah URL", onClick = {
+                            webEditId = selected.id
+                            webUrl = selected.url
+                            webDialog = true
+                        })
+                        Text("Rasio tampilan 16:9 • JavaScript aktif • sentuhan tembus", color = Ui.Muted, fontSize = 12.sp)
                     } else {
                         SectionLabel("Gambar / GIF")
                         SoftChip(
@@ -320,11 +353,11 @@ fun EditorScreen(
                         )
                     }
 
-                    SectionLabel("Ukuran")
+                    SectionLabel(if (isWeb) "Lebar Web" else "Ukuran")
                     StepSlider(
                         value = selected.size,
                         onChange = { v -> update(selected.id) { it.copy(size = v) } },
-                        range = if (isText) 0.02f..0.15f else 0.08f..0.9f
+                        range = if (isText) 0.02f..0.15f else if (isWeb) 0.2f..0.95f else 0.08f..0.9f
                     )
                     SectionLabel("Opacity")
                     StepSlider(
@@ -341,6 +374,38 @@ fun EditorScreen(
                 }
             }
         }
+    }
+
+    if (webDialog) {
+        AlertDialog(
+            onDismissRequest = { webDialog = false },
+            title = { Text(if (webEditId == null) "Tambah Web Overlay" else "Ubah URL Web") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = webUrl,
+                        onValueChange = { webUrl = it },
+                        singleLine = true,
+                        label = { Text("URL halaman alert") },
+                        placeholder = { Text("https://... ") }
+                    )
+                    Text("Gunakan URL browser source/alert dari layanan donasi. Halaman harus mendukung background transparan.", color = Ui.Muted, fontSize = 12.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val raw = webUrl.trim()
+                    val address = if (raw.startsWith("http://", true) || raw.startsWith("https://", true)) raw else "https://$raw"
+                    val parsed = android.net.Uri.parse(address)
+                    if (!parsed.host.isNullOrBlank() && parsed.scheme in listOf("http", "https")) {
+                        val target = webEditId
+                        if (target == null) addWeb(address) else update(target) { it.copy(url = address) }
+                        webDialog = false
+                    }
+                }) { Text("Simpan") }
+            },
+            dismissButton = { TextButton(onClick = { webDialog = false }) { Text("Batal") } }
+        )
     }
 
     if (editing && selected != null && selected.type == ItemType.TEXT) {
@@ -398,7 +463,17 @@ private fun CanvasItem(
             detectTapGestures(onTap = { currentOnSelect() })
         }
 
-    if (item.type == ItemType.TEXT) {
+    if (item.type == ItemType.WEB) {
+        val widthDp = with(density) { (item.size * minSide).toDp() }
+        Box(
+            Modifier.width(widthDp).heightIn(min = 48.dp)
+                .background(Color(0x3329B6F6))
+                .then(gestures),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("WEB • 16:9", color = Color.White, fontSize = 12.sp)
+        }
+    } else if (item.type == ItemType.TEXT) {
         Text(
             text = item.text,
             color = Color(item.color).copy(alpha = item.alpha),

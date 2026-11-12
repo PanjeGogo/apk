@@ -1,10 +1,13 @@
 package com.pramstudio.hudoverlay
 
 import android.content.Context
+import android.graphics.Color
 import android.graphics.drawable.AnimatedImageDrawable
 import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.WebSettings
+import android.webkit.WebView
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
@@ -38,7 +41,11 @@ class HudView(context: Context) : FrameLayout(context) {
         removeAllViews()
         val list = ArrayList<Entry>()
         for (item in items) {
-            val sig = if (item.type == ItemType.IMAGE) "I|" + item.path else "T"
+            val sig = when (item.type) {
+                ItemType.IMAGE -> "I|" + item.path
+                ItemType.WEB -> "W|" + item.url
+                ItemType.TEXT -> "T"
+            }
             val existing = cache[item.id]
             val cached: Cached
             if (existing != null && existing.sig == sig) {
@@ -77,6 +84,21 @@ class HudView(context: Context) : FrameLayout(context) {
 
     private fun createView(item: HudItem): View? {
         if (item.type == ItemType.TEXT) return TextView(context)
+        if (item.type == ItemType.WEB) {
+            val address = normalizeWebUrl(item.url) ?: return null
+            return WebView(context).apply {
+                setBackgroundColor(Color.TRANSPARENT)
+                isVerticalScrollBarEnabled = false
+                isHorizontalScrollBarEnabled = false
+                overScrollMode = View.OVER_SCROLL_NEVER
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.loadsImagesAutomatically = true
+                settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                setOnTouchListener { _, _ -> true }
+                loadUrl(address)
+            }
+        }
         val drawable = Media.decodeDrawable(item.path) ?: return null
         val iv = ImageView(context)
         iv.scaleType = ImageView.ScaleType.FIT_XY
@@ -88,6 +110,14 @@ class HudView(context: Context) : FrameLayout(context) {
         return iv
     }
 
+    private fun normalizeWebUrl(value: String): String? {
+        val raw = value.trim()
+        if (raw.isEmpty()) return null
+        val address = if (raw.startsWith("https://", true) || raw.startsWith("http://", true)) raw else "https://$raw"
+        val uri = android.net.Uri.parse(address)
+        return address.takeIf { uri.scheme in listOf("http", "https") && !uri.host.isNullOrBlank() }
+    }
+
     private fun style(v: View, item: HudItem) {
         if (v is TextView) {
             v.text = item.text
@@ -97,6 +127,12 @@ class HudView(context: Context) : FrameLayout(context) {
     }
 
     private fun release(v: View) {
+        if (v is WebView) {
+            v.stopLoading()
+            v.loadUrl("about:blank")
+            v.removeAllViews()
+            v.destroy()
+        }
         if (v is ImageView) {
             val d = v.drawable
             if (d is AnimatedImageDrawable) d.stop()
@@ -112,6 +148,13 @@ class HudView(context: Context) : FrameLayout(context) {
             if (v is TextView) {
                 v.setTextSize(TypedValue.COMPLEX_UNIT_PX, e.item.size * minSide)
                 v.measure(MeasureSpec.UNSPECIFIED, MeasureSpec.UNSPECIFIED)
+            } else if (v is WebView) {
+                val tw = (e.item.size * minSide).roundToInt().coerceAtLeast(1)
+                val th = (tw * 9f / 16f).roundToInt().coerceAtLeast(1)
+                v.measure(
+                    MeasureSpec.makeMeasureSpec(tw, MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(th, MeasureSpec.EXACTLY)
+                )
             } else if (v is ImageView) {
                 val d = v.drawable
                 val iw = d?.intrinsicWidth ?: 0
