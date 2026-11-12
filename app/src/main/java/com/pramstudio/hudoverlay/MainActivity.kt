@@ -35,6 +35,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.withStyle
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -112,9 +117,48 @@ class MainActivity : ComponentActivity() {
                 if (showPatchNotes) {
                     AlertDialog(
                         onDismissRequest = { showPatchNotes = false },
-                        title = { Text("Overlay aja v2.1.0") },
+                        title = {
+                            Column {
+                                Text("Overlay aja v2.1.0")
+                                Text(
+                                    buildAnnotatedString {
+                                        append("By: ")
+                                        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                                            append("PanjeGogo")
+                                        }
+                                    },
+                                    fontSize = 13.sp,
+                                    color = Ui.Muted
+                                )
+                            }
+                        },
                         text = {
-                            Text("• Web Overlay dengan JavaScript aktif\n• Background WebView transparan untuk alert donasi\n• Sentuhan tetap diteruskan ke game\n• URL alert dapat diatur dari editor\n• Teks dan gambar/GIF tetap tersedia")
+                            Column(
+                                Modifier
+                                    .height(320.dp)
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                Text("VERSI 2.1.0 • TERBARU", fontWeight = FontWeight.Bold)
+                                Text(
+                                    "• Web Overlay dengan JavaScript aktif\n" +
+                                        "• Background WebView transparan untuk alert donasi\n" +
+                                        "• Sentuhan tetap diteruskan ke game\n" +
+                                        "• URL alert dapat diatur dari editor\n" +
+                                        "• Teks dan gambar/GIF tetap tersedia"
+                                )
+                                Text(
+                                    "RIWAYAT VERSI SEBELUMNYA",
+                                    modifier = Modifier.padding(top = 16.dp),
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    "Versi sebelumnya\n" +
+                                        "• Editor overlay dengan pengaturan posisi, ukuran, opacity, warna, dan layer\n" +
+                                        "• Dukungan gambar dan GIF\n" +
+                                        "• Pemutar musik dengan playlist dan auto repeat\n" +
+                                        "• Tampilan aplikasi dengan tab Editor dan Musik"
+                                )
+                            }
                         },
                         confirmButton = { TextButton(onClick = { showPatchNotes = false }) { Text("Mengerti") } }
                     )
