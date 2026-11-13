@@ -2,6 +2,7 @@ package com.pramstudio.hudoverlay
 
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.AnimatedImageDrawable
 import android.util.TypedValue
 import android.view.View
@@ -122,6 +123,17 @@ class HudView(context: Context) : FrameLayout(context) {
         if (v is TextView) {
             v.text = item.text
             v.setTextColor(item.color)
+            v.typeface = when (item.fontFamily) {
+                "SANS_SERIF" -> Typeface.SANS_SERIF
+                "SERIF" -> Typeface.SERIF
+                "MONOSPACE" -> Typeface.MONOSPACE
+                "CASUAL" -> Typeface.create("casual", Typeface.NORMAL)
+                "CURSIVE" -> Typeface.create("cursive", Typeface.NORMAL)
+                "FANTASY" -> Typeface.create("fantasy", Typeface.NORMAL)
+                "SANS_SERIF_BOLD" -> Typeface.create("sans-serif", Typeface.BOLD)
+                "SERIF_BOLD" -> Typeface.create("serif", Typeface.BOLD)
+                else -> Typeface.DEFAULT
+            }
         }
         // Alpha hanya diterapkan ke teks/gambar. Alpha pada WebView akan
         // ikut memudarkan seluruh halaman (termasuk teks alert), bukan
