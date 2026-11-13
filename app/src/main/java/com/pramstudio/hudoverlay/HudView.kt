@@ -76,6 +76,8 @@ class HudView(context: Context) : FrameLayout(context) {
     }
 
     /** Hentikan animasi dan bersihkan semua elemen. */
+    fun hasTouchableWeb(): Boolean = entries.any { it.view is WebView && it.item.webTouchable }
+
     fun clear() {
         cache.values.forEach { release(it.view) }
         cache.clear()
@@ -96,7 +98,7 @@ class HudView(context: Context) : FrameLayout(context) {
                 settings.domStorageEnabled = true
                 settings.loadsImagesAutomatically = true
                 settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                setOnTouchListener { _, _ -> true }
+                setOnTouchListener { _, _ -> false }
                 loadUrl(address)
             }
         }
