@@ -59,8 +59,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -69,6 +72,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -395,6 +399,7 @@ fun EditorScreen(
                                 }
                             }
                         }
+                        Text("Alignment berlaku untuk teks beberapa baris (Edit teks, Enter untuk baris baru).", color = Ui.Muted, fontSize = 11.sp)
                         SectionLabel("Outline / Stroke")
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("Ketebalan", modifier = Modifier.weight(1f), color = Ui.Ink)
@@ -466,7 +471,7 @@ fun EditorScreen(
                             Text(if (selected.webTouchable) "Touchable" else "Untouchable", color = Ui.Ink)
                         }
                         Text(
-                            if (selected.webTouchable) "Web Overlay menerima sentuhan dan interaksi halaman."
+                            if (selected.webTouchable) "Web Overlay menerima sentuhan hanya di areanya (tampil di atas elemen lain). Area di luarnya tetap tembus ke game."
                             else "Sentuhan diteruskan ke game di belakang overlay.",
                             color = Ui.Muted,
                             fontSize = 12.sp
@@ -485,19 +490,23 @@ fun EditorScreen(
                     if (!isWeb) {
                         SectionLabel("Ukuran")
                         if (isText) {
-                            SizeStepper(
-                                value = (selected.size * 100f).roundToInt(),
-                                min = 2,
-                                max = 15,
-                                onChange = { v -> update(selected.id) { it.copy(size = v / 100f) } }
-                            )
+                            key(selected.id) {
+                                SizeStepper(
+                                    value = (selected.size * 100f).roundToInt(),
+                                    min = 2,
+                                    max = 15,
+                                    onChange = { v -> update(selected.id) { it.copy(size = v / 100f) } }
+                                )
+                            }
                         } else {
-                            UnboundedSizeStepper(
-                                value = selected.size * 100f,
-                                onChange = { percent ->
-                                    update(selected.id) { it.copy(size = percent / 100f) }
-                                }
-                            )
+                            key(selected.id) {
+                                UnboundedSizeStepper(
+                                    value = selected.size * 100f,
+                                    onChange = { percent ->
+                                        update(selected.id) { it.copy(size = percent / 100f) }
+                                    }
+                                )
+                            }
                         }
                     }
                     SectionLabel("Opacity")
@@ -596,11 +605,16 @@ fun EditorScreen(
             onDismissRequest = { editing = false },
             title = { Text("Edit teks") },
             text = {
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    singleLine = true
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        singleLine = false,
+                        maxLines = 6,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text("Tekan Enter untuk baris baru.", color = Ui.Muted, fontSize = 12.sp)
+                }
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -650,21 +664,28 @@ private fun CanvasItem(
         val ratioParts = item.webAspectRatio.split(":")
         val ratio = (ratioParts.getOrNull(0)?.toFloatOrNull() ?: 16f) /
             (ratioParts.getOrNull(1)?.toFloatOrNull() ?: 9f)
+        // background dipasang SETELAH offset (gestures), supaya kotak ikut bergeser bersama label dan border.
         Box(
             Modifier.width(widthDp).aspectRatio(ratio)
-                .background(Color(0x3329B6F6))
-                .then(gestures),
+                .then(gestures)
+                .background(Color(0x3329B6F6)),
             contentAlignment = Alignment.Center
         ) {
             Text("WEB • ${item.webAspectRatio}", color = Color.White, fontSize = 12.sp)
         }
     } else if (item.type == ItemType.TEXT) {
+        // Preview menampilkan warna, font, bobot, italic, underline, dan alignment.
+        // Outline dan shadow hanya terlihat di overlay sebenarnya.
         Text(
             text = item.text,
             color = Color(item.color).copy(alpha = item.alpha),
             fontSize = with(density) { (item.size * minSide).toSp() },
             softWrap = false,
             fontFamily = composeFontFamily(item.fontFamily),
+            fontWeight = composeFontWeight(item),
+            fontStyle = if (item.italic) FontStyle.Italic else FontStyle.Normal,
+            textDecoration = if (item.underline) TextDecoration.Underline else TextDecoration.None,
+            textAlign = composeTextAlign(item.textAlignment),
             modifier = gestures
         )
     } else {
@@ -687,8 +708,8 @@ private fun CanvasItem(
             Box(
                 Modifier
                     .size(widthDp)
-                    .background(Color(0x33FFFFFF))
                     .then(gestures)
+                    .background(Color(0x33FFFFFF))
             )
         }
     }
@@ -718,6 +739,25 @@ private fun composeFontFamily(key: String): FontFamily = when (key) {
     else -> FontFamily.Default
 }
 
+private fun composeFontWeight(item: HudItem): FontWeight {
+    var weight = when (item.fontWeight) {
+        "MEDIUM" -> FontWeight.Medium
+        "BOLD" -> FontWeight.Bold
+        "EXTRA_BOLD" -> FontWeight.ExtraBold
+        else -> FontWeight.Normal
+    }
+    if (item.fontFamily.endsWith("_BOLD") && weight.weight < FontWeight.Bold.weight) {
+        weight = FontWeight.Bold
+    }
+    return weight
+}
+
+private fun composeTextAlign(key: String): TextAlign = when (key) {
+    "CENTER" -> TextAlign.Center
+    "RIGHT" -> TextAlign.Right
+    else -> TextAlign.Left
+}
+
 private fun parseHexColor(raw: String): Int? {
     val value = raw.trim().removePrefix("#")
     if (value.length != 6 && value.length != 8) return null
@@ -731,7 +771,13 @@ private fun UnboundedSizeStepper(value: Float, onChange: (Float) -> Unit) {
     val displayValue = if (value.isFinite()) {
         String.format(java.util.Locale.US, "%.2f", value).trimEnd('0').trimEnd('.')
     } else "0"
-    var input by remember(value) { mutableStateOf(displayValue) }
+    var input by remember { mutableStateOf(displayValue) }
+    // Kolom hanya disinkronkan saat nilai berubah dari luar (tombol -/+), bukan saat mengetik,
+    // supaya titik desimal dan angka yang sedang diketik tidak terhapus.
+    LaunchedEffect(value) {
+        val parsed = input.toFloatOrNull()
+        if (parsed == null || abs(parsed - value) > 0.005f) input = displayValue
+    }
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -769,7 +815,12 @@ private fun UnboundedSizeStepper(value: Float, onChange: (Float) -> Unit) {
 
 @Composable
 private fun SizeStepper(value: Int, min: Int, max: Int, onChange: (Int) -> Unit) {
-    var input by remember(value) { mutableStateOf(value.toString()) }
+    var input by remember { mutableStateOf(value.toString()) }
+    // Jangan reset kolom saat mengetik angka di bawah minimum (mis. "1" menuju "10");
+    // sinkronkan hanya kalau nilai berubah dari luar (tombol -/+).
+    LaunchedEffect(value) {
+        if (input.toIntOrNull()?.coerceIn(min, max) != value) input = value.toString()
+    }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         SoftChip("−", onClick = { onChange((value - 1).coerceAtLeast(min)) })
         OutlinedTextField(
