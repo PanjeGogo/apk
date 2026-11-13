@@ -22,9 +22,6 @@ object ConfigArchive {
             .forEach { item -> if (item.path.isNotBlank() && File(item.path).isFile) assets.add(item.path) }
         context.contentResolver.openOutputStream(uri)?.use { output ->
             ZipOutputStream(output).use { zip ->
-                zip.putNextEntry(ZipEntry("config.json"))
-                zip.write(root.toString().toByteArray(Charsets.UTF_8))
-                zip.closeEntry()
                 assets.forEachIndexed { index, path ->
                     val file = File(path)
                     zip.putNextEntry(ZipEntry("media/$index.img"))
@@ -42,6 +39,9 @@ object ConfigArchive {
                         }
                     }
                 }
+                zip.putNextEntry(ZipEntry("config.json"))
+                zip.write(root.toString().toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
             }
         } ?: error("Tidak bisa membuat file tujuan")
     }
