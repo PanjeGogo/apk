@@ -1,7 +1,22 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+// Debug keystore tetap (standar: alias androiddebugkey, password android; bukan rahasia).
+// Disimpan sebagai teks base64 di .github/debug-keystore.b64 lalu didekode saat konfigurasi Gradle,
+// sehingga setiap build (termasuk CI) memakai tanda tangan yang sama dan APK baru bisa
+// menimpa versi lama tanpa uninstall.
+val fixedDebugKeystoreB64 = File(rootDir, ".github/debug-keystore.b64")
+val fixedDebugKeystore = File(rootDir, ".gradle/fixed-debug.keystore")
+if (fixedDebugKeystoreB64.exists()) {
+    fixedDebugKeystore.parentFile.mkdirs()
+    fixedDebugKeystore.writeBytes(
+        Base64.getMimeDecoder().decode(fixedDebugKeystoreB64.readText().trim())
+    )
 }
 
 android {
@@ -12,8 +27,19 @@ android {
         applicationId = "com.PanjeGoGo.AppOverlay"
         minSdk = 28
         targetSdk = 34
-        versionCode = 7
-        versionName = "2.2.0"
+        versionCode = 8
+        versionName = "2.2.1"
+    }
+
+    signingConfigs {
+        getByName("debug") {
+            if (fixedDebugKeystore.exists()) {
+                storeFile = fixedDebugKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
     }
 
     compileOptions {

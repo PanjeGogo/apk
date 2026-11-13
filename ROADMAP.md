@@ -8,7 +8,7 @@ Dokumen ini adalah acuan roadmap utama proyek Overlay aja. Status fitur menggamb
 - Developer: PanjeGogo
 - Application ID: `com.PanjeGoGo.AppOverlay`
 - Namespace: `com.pramstudio.hudoverlay`
-- Versi aplikasi saat ini: `2.2.0` (versionCode 7)
+- Versi aplikasi saat ini: `2.2.1` (versionCode 8)
 - Bahasa/platform: Kotlin / Android
 - UI: Jetpack Compose
 - Overlay: Android WindowManager + foreground service
@@ -18,20 +18,24 @@ Dokumen ini adalah acuan roadmap utama proyek Overlay aja. Status fitur menggamb
 | Area | Fitur | Status |
 |---|---|---|
 | App shell | Tab Editor, Musik, Pengaturan | Selesai |
+| App shell | Tab, profil, dan Patch Notes tidak ter-reset saat layar diputar | Selesai di source; uji di perangkat |
 | App shell | Identitas Overlay aja / PanjeGogo | Selesai |
-| App shell | Warna aksen aplikasi dengan Orange sebagai default | Selesai |
+| App shell | Warna aksen aplikasi dengan Orange sebagai default; status bar mengikuti warna aksen | Selesai |
 | App shell | Patch Notes tampil setiap aplikasi dibuka | Selesai |
 | Editor | Profil Portrait dan Landscape terpisah | Selesai |
 | Editor | Tambah, pilih, geser, dan hapus elemen | Selesai |
 | Editor | Pengaturan urutan layer | Selesai |
-| Editor teks | Font family, weight, italic, underline, alignment | Selesai |
-| Editor teks | Warna HEX, opacity, outline, dan shadow | Selesai |
+| Editor | Preview WEB mengikuti posisi; preview teks menampilkan bobot, italic, underline, alignment | Selesai di source |
+| Editor teks | Font family (termasuk Sans Serif Bold dan Serif Bold), weight, italic, underline, alignment | Selesai di source; uji di perangkat |
+| Editor teks | Teks multi-baris; alignment berlaku untuk teks multi-baris | Selesai di source |
+| Editor teks | Warna HEX, opacity, outline, dan shadow | Selesai di source; uji outline di perangkat |
+| Editor teks | Input ukuran bisa diketik langsung (mis. 10–15) | Selesai di source |
 | Editor gambar | Import gambar dan GIF dari perangkat | Selesai |
 | Editor gambar | GIF/WebP animasi pada overlay | Selesai |
 | Editor gambar | Input ukuran desimal tanpa batas maksimum/minimum tetap | Selesai di source; uji ekstrem di perangkat |
 | WEB overlay | URL dan JavaScript aktif | Selesai |
 | WEB overlay | Rasio 16:9, 9:16, 1:1, 4:3, 3:4, 21:9 | Selesai |
-| WEB overlay | Pengaturan interaksi/touch-through | Selesai di source; uji per perangkat |
+| WEB overlay | Touchable memakai jendela sendiri; area di luar web tetap tembus ke game | Selesai di source; uji per perangkat |
 | Musik | Playlist multi-lagu, play/pause, next/previous | Selesai |
 | Musik | Volume dan auto-repeat | Selesai |
 | Service | Foreground notification dan aksi kontrol | Selesai |
@@ -40,7 +44,10 @@ Dokumen ini adalah acuan roadmap utama proyek Overlay aja. Status fitur menggamb
 | Project | Aset gambar/GIF ikut disimpan dalam `.panje` | Selesai di source |
 | Project | Playlist musik tidak ikut disimpan dalam `.panje` | Sesuai keputusan desain |
 | Project | Validasi format, versi, payload, dan aset | Selesai di source |
+| Project | Import membersihkan gambar lama; pesan jelas jika memori tidak cukup | Selesai di source |
+| Penyimpanan | Elemen layout yang rusak dilewati satu per satu (tidak mereset seluruh layout) | Selesai di source |
 | CI | Build debug APK melalui GitHub Actions | Workflow tersedia; periksa status run terbaru |
+| CI | Debug keystore tetap sehingga update APK tidak perlu uninstall | Selesai di source; uji install di atas versi sebelumnya |
 
 ## Spesifikasi arsip `.panje`
 
@@ -54,18 +61,20 @@ Keputusan desain yang harus dipertahankan:
 6. Import harus memvalidasi file sebelum mengganti konfigurasi yang sedang tersimpan.
 7. Jika import gagal, konfigurasi lama harus tetap utuh dan file sementara hasil import harus dibersihkan.
 
-Implementasi saat ini memakai AES-256-GCM dengan kunci yang ditanam di aplikasi. Karena tidak ada password dan kunci harus tersedia pada instalasi aplikasi lain, proteksi ini bukan jaminan anti-reverse-engineering absolut. Batas keselamatan implementasi saat ini: arsip maksimum 128 MiB dan maksimum 512 aset.
+Implementasi saat ini memakai AES-256-GCM dengan kunci yang ditanam di aplikasi. Karena tidak ada password dan kunci harus tersedia pada instalasi aplikasi lain, proteksi ini bukan jaminan anti-reverse-engineering absolut. URL WEB yang berisi token ikut tersimpan, jadi file `.panje` tidak boleh dibagikan ke pihak yang tidak dipercaya. Batas keselamatan implementasi saat ini: arsip maksimum 128 MiB dan maksimum 512 aset.
 
 ## Prioritas berikutnya
 
 ### P0 — Stabilitas dan verifikasi perangkat
 
+- [ ] Uninstall APK lama sekali (export `.panje` dulu), lalu install APK 2.2.1 hasil workflow; pastikan build berikutnya bisa di-install di atasnya tanpa uninstall.
 - [ ] Install APK hasil workflow terbaru pada perangkat Android target.
 - [ ] Uji izin overlay, mulai/jeda/lanjut/stop, dan notifikasi.
-- [ ] Uji orientasi Portrait ↔ Landscape ketika overlay aktif.
+- [ ] Uji orientasi Portrait ↔ Landscape ketika overlay aktif, dan pastikan tab/profil editor tidak ter-reset saat layar diputar.
 - [ ] Uji tambah/edit/hapus teks dan gambar/GIF; pastikan perubahan langsung terlihat.
+- [ ] Uji teks: Serif Bold/Sans Serif Bold, weight Medium/Extra Bold, teks multi-baris dengan alignment, outline, shadow (dengan dan tanpa blur), dan pastikan outline tidak menguras baterai/CPU.
 - [ ] Uji ukuran gambar/GIF: 0, angka desimal, nilai besar, dan nilai ekstrem; pastikan editor tidak crash dan perilaku rendering dapat dipahami.
-- [ ] Uji WEB: setiap rasio, URL, JavaScript, transparansi, dan mode sentuhan.
+- [ ] Uji WEB: setiap rasio, URL, JavaScript, transparansi, dan mode sentuhan; pada mode Touchable pastikan hanya area web yang menerima sentuhan, game di luar area tetap bisa disentuh, dan posisi/ukuran jendela web sama dengan preview setelah rotasi.
 - [ ] Uji playlist: izin URI, next/previous, repeat, volume, dan perilaku saat service dihentikan.
 - [ ] Uji export/import `.panje` dengan layout Portrait + Landscape dan beberapa aset gambar/GIF.
 - [ ] Uji file rusak, versi tidak didukung, aset hilang, dan arsip terlalu besar; konfigurasi lama harus tetap aman.

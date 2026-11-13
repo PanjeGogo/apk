@@ -1,13 +1,14 @@
 package com.pramstudio.hudoverlay
 
 import android.content.Context
-import android.graphics.Color
-import android.graphics.Typeface
-import android.graphics.Paint
 import android.graphics.Canvas
-import android.view.Gravity
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Typeface
 import android.graphics.drawable.AnimatedImageDrawable
+import android.net.Uri
 import android.util.TypedValue
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebSettings
@@ -15,11 +16,59 @@ import android.webkit.WebView
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
+import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
+/** Batas aman ukuran satu elemen (px) supaya nilai ekstrem tidak merusak render. */
+private const val MAX_VIEW_PX = 16384
+
+/** Alamat web yang valid (http/https), atau null kalau URL tidak bisa dipakai. */
+fun normalizeWebUrl(value: String): String? {
+    val raw = value.trim()
+    if (raw.isEmpty()) return null
+    val address = if (raw.startsWith("https://", true) || raw.startsWith("http://", true)) raw else "https://$raw"
+    val uri = Uri.parse(address)
+    return address.takeIf { uri.scheme in listOf("http", "https") && !uri.host.isNullOrBlank() }
+}
+
+/** Rasio lebar/tinggi dari teks seperti "16:9". */
+fun aspectRatioOf(value: String): Float {
+    val parts = value.split(":")
+    val w = parts.getOrNull(0)?.toFloatOrNull() ?: 16f
+    val h = parts.getOrNull(1)?.toFloatOrNull() ?: 9f
+    val ratio = w / h
+    return if (ratio.isFinite() && ratio > 0f) ratio else 16f / 9f
+}
+
+fun createOverlayWebView(context: Context, address: String): WebView =
+    WebView(context).apply {
+        setBackgroundColor(Color.TRANSPARENT)
+        isVerticalScrollBarEnabled = false
+        isHorizontalScrollBarEnabled = false
+        overScrollMode = View.OVER_SCROLL_NEVER
+        settings.javaScriptEnabled = true
+        settings.domStorageEnabled = true
+        settings.loadsImagesAutomatically = true
+        settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        loadUrl(address)
+    }
+
+/** Lepas WebView dari parent dulu baru di-destroy, supaya tidak ada peringatan "destroy() while attached". */
+fun destroyOverlayWebView(v: WebView) {
+    (v.parent as? ViewGroup)?.removeView(v)
+    v.stopLoading()
+    v.loadUrl("about:blank")
+    v.removeAllViews()
+    v.destroy()
+}
+
 /**
- * Menggambar semua elemen overlay (teks dan gambar/GIF) dengan posisi pecahan layar.
+ * Menggambar elemen overlay (teks dan gambar/GIF, serta Web Overlay yang tidak touchable)
+ * dengan posisi pecahan layar. Web Overlay yang touchable memakai jendela kecil sendiri
+ * (lihat OverlayService) supaya sentuhan di luar area web tetap tembus ke game.
  * View dipakai ulang antar update supaya animasi GIF tidak restart tiap kali editor menyimpan.
  */
 class HudView(context: Context) : FrameLayout(context) {
@@ -30,6 +79,11 @@ class HudView(context: Context) : FrameLayout(context) {
 
     private val cache = HashMap<Long, Cached>()
     private var entries: List<Entry> = emptyList()
+    private var lastW = 0
+    private var lastH = 0
+
+    /** Dipanggil di thread UI setiap kali ukuran layar overlay (px) berubah. */
+    var onSized: ((Int, Int) -> Unit)? = null
 
     fun setItems(items: List<HudItem>) {
         val keep = items.map { it.id }.toSet()
@@ -79,8 +133,6 @@ class HudView(context: Context) : FrameLayout(context) {
     }
 
     /** Hentikan animasi dan bersihkan semua elemen. */
-    fun hasTouchableWeb(): Boolean = entries.any { it.view is WebView && it.item.webTouchable }
-
     fun clear() {
         cache.values.forEach { release(it.view) }
         cache.clear()
@@ -92,18 +144,7 @@ class HudView(context: Context) : FrameLayout(context) {
         if (item.type == ItemType.TEXT) return StyledOverlayTextView(context)
         if (item.type == ItemType.WEB) {
             val address = normalizeWebUrl(item.url) ?: return null
-            return WebView(context).apply {
-                setBackgroundColor(Color.TRANSPARENT)
-                isVerticalScrollBarEnabled = false
-                isHorizontalScrollBarEnabled = false
-                overScrollMode = View.OVER_SCROLL_NEVER
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.loadsImagesAutomatically = true
-                settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                setOnTouchListener { _, _ -> false }
-                loadUrl(address)
-            }
+            return createOverlayWebView(context, address)
         }
         val drawable = Media.decodeDrawable(item.path) ?: return null
         val iv = ImageView(context)
@@ -116,45 +157,60 @@ class HudView(context: Context) : FrameLayout(context) {
         return iv
     }
 
-    private fun normalizeWebUrl(value: String): String? {
-        val raw = value.trim()
-        if (raw.isEmpty()) return null
-        val address = if (raw.startsWith("https://", true) || raw.startsWith("http://", true)) raw else "https://$raw"
-        val uri = android.net.Uri.parse(address)
-        return address.takeIf { uri.scheme in listOf("http", "https") && !uri.host.isNullOrBlank() }
-    }
-
     private fun style(v: View, item: HudItem) {
         if (v is TextView) {
             v.text = item.text
             v.setTextColor(item.color)
-            val style = when (item.fontWeight) {
-                "MEDIUM" -> Typeface.BOLD
-                "BOLD", "EXTRA_BOLD" -> Typeface.BOLD
-                else -> Typeface.NORMAL
-            } or if (item.italic) Typeface.ITALIC else Typeface.NORMAL
+
+            // Bobot huruf asli (API 28+), bukan sekadar normal/bold.
+            var weight = when (item.fontWeight) {
+                "MEDIUM" -> 500
+                "BOLD" -> 700
+                "EXTRA_BOLD" -> 800
+                else -> 400
+            }
+            if (item.fontFamily.endsWith("_BOLD")) weight = max(weight, 700)
             val family = when (item.fontFamily) {
-                "SANS_SERIF" -> "sans-serif"
-                "SERIF" -> "serif"
+                "SERIF", "SERIF_BOLD" -> "serif"
                 "MONOSPACE" -> "monospace"
                 "CASUAL" -> "casual"
                 "CURSIVE" -> "cursive"
                 "FANTASY" -> "fantasy"
                 else -> "sans-serif"
             }
-            v.typeface = Typeface.create(family, style)
-            v.paint.isFakeBoldText = item.fontWeight == "EXTRA_BOLD"
-            v.paintFlags = if (item.underline) v.paintFlags or Paint.UNDERLINE_TEXT_FLAG else v.paintFlags and Paint.UNDERLINE_TEXT_FLAG.inv()
+            v.typeface = Typeface.create(Typeface.create(family, Typeface.NORMAL), weight, item.italic)
+            v.paint.isFakeBoldText = false
+            v.paintFlags = if (item.underline) {
+                v.paintFlags or Paint.UNDERLINE_TEXT_FLAG
+            } else {
+                v.paintFlags and Paint.UNDERLINE_TEXT_FLAG.inv()
+            }
+            // Alignment berlaku untuk teks multi-baris (lebar view mengikuti baris terpanjang).
             v.gravity = when (item.textAlignment) {
                 "CENTER" -> Gravity.CENTER_HORIZONTAL
                 "RIGHT" -> Gravity.RIGHT
                 else -> Gravity.LEFT
             }
-            v.setShadowLayer(item.shadowBlur, item.shadowDx, item.shadowDy, item.shadowColor)
+            // Radius 0 membuat Android menghapus shadow; shadow tanpa blur dibuat dengan radius sangat kecil.
+            val shadowRadius = when {
+                item.shadowBlur > 0f -> item.shadowBlur
+                item.shadowDx != 0f || item.shadowDy != 0f -> 0.01f
+                else -> 0f
+            }
+            v.setShadowLayer(shadowRadius, item.shadowDx, item.shadowDy, item.shadowColor)
             if (v is StyledOverlayTextView) {
                 v.strokeColor = item.outlineColor
                 v.strokeWidth = item.outlineWidth
+                // Padding secukupnya supaya outline dan shadow tidak terpotong batas view.
+                val shadowExtent = if (shadowRadius > 0f) {
+                    shadowRadius + max(abs(item.shadowDx), abs(item.shadowDy))
+                } else {
+                    0f
+                }
+                val pad = ceil(max(item.outlineWidth, shadowExtent)).toInt().coerceIn(0, 96)
+                if (v.paddingLeft != pad) v.setPadding(pad, pad, pad, pad)
             }
+            v.invalidate()
         }
         // Alpha hanya diterapkan ke teks/gambar. Alpha pada WebView akan
         // ikut memudarkan seluruh halaman (termasuk teks alert), bukan
@@ -164,10 +220,7 @@ class HudView(context: Context) : FrameLayout(context) {
 
     private fun release(v: View) {
         if (v is WebView) {
-            v.stopLoading()
-            v.loadUrl("about:blank")
-            v.removeAllViews()
-            v.destroy()
+            destroyOverlayWebView(v)
         }
         if (v is ImageView) {
             val d = v.drawable
@@ -185,11 +238,8 @@ class HudView(context: Context) : FrameLayout(context) {
                 v.setTextSize(TypedValue.COMPLEX_UNIT_PX, e.item.size * minSide)
                 v.measure(MeasureSpec.UNSPECIFIED, MeasureSpec.UNSPECIFIED)
             } else if (v is WebView) {
-                val tw = (e.item.size * minSide).roundToInt().coerceAtLeast(1)
-                val parts = e.item.webAspectRatio.split(":")
-                val ratio = (parts.getOrNull(0)?.toFloatOrNull() ?: 16f) /
-                    (parts.getOrNull(1)?.toFloatOrNull() ?: 9f)
-                val th = (tw / ratio).roundToInt().coerceAtLeast(1)
+                val tw = (e.item.size * minSide).roundToInt().coerceIn(1, MAX_VIEW_PX)
+                val th = (tw / aspectRatioOf(e.item.webAspectRatio)).roundToInt().coerceIn(1, MAX_VIEW_PX)
                 v.measure(
                     MeasureSpec.makeMeasureSpec(tw, MeasureSpec.EXACTLY),
                     MeasureSpec.makeMeasureSpec(th, MeasureSpec.EXACTLY)
@@ -198,9 +248,9 @@ class HudView(context: Context) : FrameLayout(context) {
                 val d = v.drawable
                 val iw = d?.intrinsicWidth ?: 0
                 val ih = d?.intrinsicHeight ?: 0
-                val tw = (e.item.size * minSide).roundToInt().coerceAtLeast(1)
+                val tw = (e.item.size * minSide).roundToInt().coerceIn(1, MAX_VIEW_PX)
                 val th = if (iw > 0 && ih > 0) {
-                    (tw.toFloat() * ih / iw).roundToInt().coerceAtLeast(1)
+                    (tw.toFloat() * ih / iw).roundToInt().coerceIn(1, MAX_VIEW_PX)
                 } else {
                     tw
                 }
@@ -217,31 +267,49 @@ class HudView(context: Context) : FrameLayout(context) {
         val w = right - left
         val h = bottom - top
         for (e in entries) {
-            val l = (e.item.x * w).roundToInt()
-            val t = (e.item.y * h).roundToInt()
+            // Padding teks (untuk outline/shadow) digeser balik supaya posisi huruf tetap di x,y.
+            val pad = (e.view as? TextView)?.paddingLeft ?: 0
+            val l = (e.item.x * w).roundToInt() - pad
+            val t = (e.item.y * h).roundToInt() - pad
             e.view.layout(l, t, l + e.view.measuredWidth, t + e.view.measuredHeight)
+        }
+        if (w > 0 && h > 0 && (w != lastW || h != lastH)) {
+            lastW = w
+            lastH = h
+            post { onSized?.invoke(w, h) }
         }
     }
 }
 
-
+/**
+ * TextView dengan garis luar (outline). Garis digambar langsung lewat Layout dengan
+ * mengubah warna Paint, tanpa memanggil setTextColor() di onDraw (yang dulu memicu
+ * invalidate tanpa henti dan menguras baterai).
+ */
 private class StyledOverlayTextView(context: Context) : TextView(context) {
     var strokeColor: Int = Color.BLACK
     var strokeWidth: Float = 0f
 
     override fun onDraw(canvas: Canvas) {
-        if (strokeWidth > 0f) {
-            val originalColor = currentTextColor
-            val originalStyle = paint.style
-            val originalStroke = paint.strokeWidth
-            setTextColor(strokeColor)
-            paint.style = Paint.Style.STROKE
-            paint.strokeJoin = Paint.Join.ROUND
-            paint.strokeWidth = strokeWidth * 2f
-            super.onDraw(canvas)
-            setTextColor(originalColor)
-            paint.style = originalStyle
-            paint.strokeWidth = originalStroke
+        val textLayout = getLayout()
+        if (strokeWidth > 0f && textLayout != null) {
+            val p = paint
+            val oldColor = p.color
+            val oldStyle = p.style
+            val oldWidth = p.strokeWidth
+            val oldJoin = p.strokeJoin
+            p.color = strokeColor
+            p.style = Paint.Style.STROKE
+            p.strokeJoin = Paint.Join.ROUND
+            p.strokeWidth = strokeWidth * 2f
+            canvas.save()
+            canvas.translate(compoundPaddingLeft.toFloat(), extendedPaddingTop.toFloat())
+            textLayout.draw(canvas)
+            canvas.restore()
+            p.style = oldStyle
+            p.strokeWidth = oldWidth
+            p.strokeJoin = oldJoin
+            p.color = oldColor
         }
         super.onDraw(canvas)
     }
