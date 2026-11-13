@@ -74,6 +74,23 @@ object HudStore {
         prefs(ctx).edit().putString(KEY_LAYOUT, o.toString()).apply()
     }
 
+    fun exportJson(ctx: Context): String {
+        val layout = load(ctx)
+        return JSONObject()
+            .put("format", "panje")
+            .put("version", 1)
+            .put("portrait", encode(layout.portrait))
+            .put("landscape", encode(layout.landscape))
+            .toString()
+    }
+
+    fun importJson(ctx: Context, raw: String) {
+        val obj = JSONObject(raw)
+        require(obj.optString("format") == "panje") { "File bukan konfigurasi Panje" }
+        val layout = HudLayout(decode(obj.optJSONArray("portrait")), decode(obj.optJSONArray("landscape")))
+        save(ctx, layout)
+    }
+
     private fun defaultLayout() = HudLayout(
         portrait = listOf(sample(1L)),
         landscape = listOf(sample(2L))
@@ -89,7 +106,7 @@ object HudStore {
         color = 0xFFFFFFFF.toInt()
     )
 
-    private fun encode(items: List<HudItem>): JSONArray {
+    fun encode(items: List<HudItem>): JSONArray {
         val arr = JSONArray()
         items.forEach {
             arr.put(
@@ -121,7 +138,7 @@ object HudStore {
         return arr
     }
 
-    private fun decode(arr: JSONArray?): List<HudItem> {
+    fun decode(arr: JSONArray?): List<HudItem> {
         if (arr == null) return emptyList()
         return (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
