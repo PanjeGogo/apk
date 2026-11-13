@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -92,7 +94,7 @@ fun EditorScreen(
     var webUrl by remember { mutableStateOf("https://") }
     var webEditId by remember { mutableStateOf<Long?>(null) }
     var fontMenu by remember { mutableStateOf(false) }
-    var webSizeMenu by remember { mutableStateOf(false) }
+    var webRatioMenu by remember { mutableStateOf(false) }
     var weightMenu by remember { mutableStateOf(false) }
     var alignMenu by remember { mutableStateOf(false) }
     var hexTarget by remember { mutableStateOf("TEXT") }
@@ -151,7 +153,7 @@ fun EditorScreen(
         val item = HudItem(
             id = System.nanoTime(), type = ItemType.WEB, url = address,
             x = 0.08f + 0.03f * (n % 5), y = 0.18f + 0.05f * (n % 5),
-            size = 0.48f, alpha = 1f, color = 0xFFFFFFFF.toInt()
+            size = 0.48f, alpha = 1f, color = 0xFFFFFFFF.toInt(), webAspectRatio = "16:9"
         )
         layout = layout.withItems(profile, layout.items(profile) + item)
         selectedId = item.id
@@ -427,22 +429,33 @@ fun EditorScreen(
                             webUrl = selected.url
                             webDialog = true
                         })
-                        Text("Rasio tampilan 16:9 • JavaScript aktif", color = Ui.Muted, fontSize = 12.sp)
-                        SectionLabel("Ukuran Web")
+                        Text("JavaScript aktif", color = Ui.Muted, fontSize = 12.sp)
+                        SectionLabel("Rasio WEB")
                         Box {
-                            SoftChip("Lebar: " + (selected.size * 100f).roundToInt() + "%", onClick = { webSizeMenu = true })
-                            DropdownMenu(expanded = webSizeMenu, onDismissRequest = { webSizeMenu = false }) {
-                                listOf(25, 40, 60, 75, 90, 95).forEach { percent ->
+                            SoftChip("Rasio: " + selected.webAspectRatio, onClick = { webRatioMenu = true })
+                            DropdownMenu(expanded = webRatioMenu, onDismissRequest = { webRatioMenu = false }) {
+                                listOf("16:9", "9:16", "1:1", "4:3", "3:4", "21:9").forEach { ratio ->
                                     DropdownMenuItem(
-                                        text = { Text("$percent%") },
+                                        text = { Text(ratio) },
                                         onClick = {
-                                            update(selected.id) { it.copy(size = percent / 100f) }
-                                            webSizeMenu = false
+                                            update(selected.id) { it.copy(webAspectRatio = ratio) }
+                                            webRatioMenu = false
                                         }
                                     )
                                 }
                             }
                         }
+                        SectionLabel("Ukuran WEB")
+                        val webPercent = (selected.size * 100f).roundToInt().coerceIn(1, 100)
+                        Text("Lebar: $webPercent%", color = Ui.Ink, fontWeight = FontWeight.SemiBold)
+                        Slider(
+                            value = webPercent.toFloat(),
+                            onValueChange = { percent ->
+                                update(selected.id) { it.copy(size = percent.coerceIn(1f, 100f) / 100f) }
+                            },
+                            valueRange = 1f..100f,
+                            steps = 98
+                        )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(
                                 checked = selected.webTouchable,
@@ -625,13 +638,16 @@ private fun CanvasItem(
 
     if (item.type == ItemType.WEB) {
         val widthDp = with(density) { (item.size * minSide).toDp() }
+        val ratioParts = item.webAspectRatio.split(":")
+        val ratio = (ratioParts.getOrNull(0)?.toFloatOrNull() ?: 16f) /
+            (ratioParts.getOrNull(1)?.toFloatOrNull() ?: 9f)
         Box(
-            Modifier.width(widthDp).heightIn(min = 48.dp)
+            Modifier.width(widthDp).aspectRatio(ratio)
                 .background(Color(0x3329B6F6))
                 .then(gestures),
             contentAlignment = Alignment.Center
         ) {
-            Text("WEB • 16:9", color = Color.White, fontSize = 12.sp)
+            Text("WEB • ${item.webAspectRatio}", color = Color.White, fontSize = 12.sp)
         }
     } else if (item.type == ItemType.TEXT) {
         Text(
