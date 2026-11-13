@@ -67,14 +67,7 @@ class MainActivity : ComponentActivity() {
                 androidx.compose.runtime.LaunchedEffect(Unit) { Ui.setAccent(HudStore.prefs(this@MainActivity).getInt("app_color", 0xFFFF9800.toInt())) }
                 var profile by remember { mutableStateOf(Profile.PORTRAIT) }
                 var showInfo by remember { mutableStateOf(false) }
-                var showPatchNotes by remember { mutableStateOf(false) }
-                androidx.compose.runtime.LaunchedEffect(Unit) {
-                    val prefs = HudStore.prefs(this@MainActivity)
-                    if (prefs.getString("shown_patch_version", "") != "2.2.0") {
-                        prefs.edit().putString("shown_patch_version", "2.2.0").apply()
-                        showPatchNotes = true
-                    }
-                }
+                var showPatchNotes by remember { mutableStateOf(true) }
 
                 Column(
                     Modifier
