@@ -486,8 +486,8 @@ fun EditorScreen(
                         SectionLabel("Ukuran")
                         SizeStepper(
                             value = (selected.size * 100f).roundToInt(),
-                            min = if (isText) 2 else 8,
-                            max = if (isText) 15 else 90,
+                            min = if (isText) 2 else 1,
+                            max = if (isText) 15 else 100,
                             onChange = { v -> update(selected.id) { it.copy(size = v / 100f) } }
                         )
                     }
