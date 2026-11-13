@@ -28,6 +28,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -91,6 +92,7 @@ fun EditorScreen(
     var webUrl by remember { mutableStateOf("https://") }
     var webEditId by remember { mutableStateOf<Long?>(null) }
     var fontMenu by remember { mutableStateOf(false) }
+    var webSizeMenu by remember { mutableStateOf(false) }
     var colorDialog by remember { mutableStateOf(false) }
     var hexColor by remember { mutableStateOf("#FFFFFF") }
 
@@ -365,7 +367,37 @@ fun EditorScreen(
                             webUrl = selected.url
                             webDialog = true
                         })
-                        Text("Rasio tampilan 16:9 • JavaScript aktif • sentuhan tembus", color = Ui.Muted, fontSize = 12.sp)
+                        Text("Rasio tampilan 16:9 • JavaScript aktif", color = Ui.Muted, fontSize = 12.sp)
+                        SectionLabel("Ukuran Web")
+                        Box {
+                            SoftChip("Lebar: " + (selected.size * 100f).roundToInt() + "%", onClick = { webSizeMenu = true })
+                            DropdownMenu(expanded = webSizeMenu, onDismissRequest = { webSizeMenu = false }) {
+                                listOf(25, 40, 60, 75, 90, 95).forEach { percent ->
+                                    DropdownMenuItem(
+                                        text = { Text("$percent%") },
+                                        onClick = {
+                                            update(selected.id) { it.copy(size = percent / 100f) }
+                                            webSizeMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = selected.webTouchable,
+                                onCheckedChange = { enabled ->
+                                    update(selected.id) { it.copy(webTouchable = enabled) }
+                                }
+                            )
+                            Text(if (selected.webTouchable) "Touchable" else "Untouchable", color = Ui.Ink)
+                        }
+                        Text(
+                            if (selected.webTouchable) "Web Overlay menerima sentuhan dan interaksi halaman."
+                            else "Sentuhan diteruskan ke game di belakang overlay.",
+                            color = Ui.Muted,
+                            fontSize = 12.sp
+                        )
                     } else {
                         SectionLabel("Gambar / GIF")
                         SoftChip(
@@ -377,13 +409,15 @@ fun EditorScreen(
                         )
                     }
 
-                    SectionLabel(if (isWeb) "Lebar Web" else "Ukuran")
-                    SizeStepper(
-                        value = (selected.size * 100f).roundToInt(),
-                        min = if (isText) 2 else if (isWeb) 20 else 8,
-                        max = if (isText) 15 else if (isWeb) 95 else 90,
-                        onChange = { v -> update(selected.id) { it.copy(size = v / 100f) } }
-                    )
+                    if (!isWeb) {
+                        SectionLabel("Ukuran")
+                        SizeStepper(
+                            value = (selected.size * 100f).roundToInt(),
+                            min = if (isText) 2 else 8,
+                            max = if (isText) 15 else 90,
+                            onChange = { v -> update(selected.id) { it.copy(size = v / 100f) } }
+                        )
+                    }
                     SectionLabel("Opacity")
                     StepSlider(
                         value = selected.alpha,
