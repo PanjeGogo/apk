@@ -484,12 +484,21 @@ fun EditorScreen(
 
                     if (!isWeb) {
                         SectionLabel("Ukuran")
-                        SizeStepper(
-                            value = (selected.size * 100f).roundToInt(),
-                            min = if (isText) 2 else 1,
-                            max = if (isText) 15 else 100,
-                            onChange = { v -> update(selected.id) { it.copy(size = v / 100f) } }
-                        )
+                        if (isText) {
+                            SizeStepper(
+                                value = (selected.size * 100f).roundToInt(),
+                                min = 2,
+                                max = 15,
+                                onChange = { v -> update(selected.id) { it.copy(size = v / 100f) } }
+                            )
+                        } else {
+                            UnboundedSizeStepper(
+                                value = selected.size * 100f,
+                                onChange = { percent ->
+                                    update(selected.id) { it.copy(size = percent / 100f) }
+                                }
+                            )
+                        }
                     }
                     SectionLabel("Opacity")
                     StepSlider(
@@ -715,6 +724,47 @@ private fun parseHexColor(raw: String): Int? {
     return value.toLongOrNull(16)?.let {
         if (value.length == 6) (0xFF000000L or it).toInt() else it.toInt()
     }
+}
+
+@Composable
+private fun UnboundedSizeStepper(value: Float, onChange: (Float) -> Unit) {
+    val displayValue = if (value.isFinite()) {
+        String.format(java.util.Locale.US, "%.2f", value).trimEnd('0').trimEnd('.')
+    } else "0"
+    var input by remember(value) { mutableStateOf(displayValue) }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        SoftChip("−", onClick = {
+            onChange((value - 1f).coerceAtLeast(0f))
+        })
+        OutlinedTextField(
+            value = input,
+            onValueChange = { raw ->
+                val filtered = raw.filter { it.isDigit() || it == '.' || it == ',' }
+                val normalized = filtered.replace(',', '.')
+                if (normalized.count { it == '.' } <= 1) {
+                    input = normalized
+                    normalized.toFloatOrNull()?.takeIf { it.isFinite() && it >= 0f }?.let(onChange)
+                }
+            },
+            modifier = Modifier.weight(1f),
+            singleLine = true,
+            label = { Text("Ukuran (%)") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+        )
+        SoftChip("+", onClick = {
+            val next = value + 1f
+            if (next.isFinite()) onChange(next)
+        })
+    }
+    Text(
+        "Tidak ada batas ukuran. Masukkan nilai sesuai kebutuhan; 0% menyembunyikan gambar.",
+        color = Ui.Muted,
+        fontSize = 11.sp
+    )
 }
 
 @Composable
