@@ -28,7 +28,8 @@ data class HudItem(
     val y: Float,
     val size: Float,
     val alpha: Float,
-    val color: Int
+    val color: Int,
+    val fontFamily: String = "DEFAULT"
 )
 
 /** Urutan list = urutan layer (elemen terakhir ada di paling atas). */
@@ -92,6 +93,7 @@ object HudStore {
                     .put("size", it.size.toDouble())
                     .put("alpha", it.alpha.toDouble())
                     .put("color", it.color)
+                    .put("fontFamily", it.fontFamily)
             )
         }
         return arr
@@ -116,7 +118,8 @@ object HudStore {
                 y = o.getDouble("y").toFloat(),
                 size = o.getDouble("size").toFloat(),
                 alpha = o.getDouble("alpha").toFloat(),
-                color = o.getInt("color")
+                color = o.getInt("color"),
+                fontFamily = o.optString("fontFamily", "DEFAULT")
             )
         }
     }
