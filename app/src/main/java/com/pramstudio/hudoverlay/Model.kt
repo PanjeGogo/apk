@@ -30,7 +30,17 @@ data class HudItem(
     val alpha: Float,
     val color: Int,
     val fontFamily: String = "DEFAULT",
-    val webTouchable: Boolean = false
+    val webTouchable: Boolean = false,
+    val fontWeight: String = "REGULAR",
+    val italic: Boolean = false,
+    val underline: Boolean = false,
+    val outlineColor: Int = 0xFF000000.toInt(),
+    val outlineWidth: Float = 0f,
+    val shadowColor: Int = 0x99000000.toInt(),
+    val shadowBlur: Float = 0f,
+    val shadowDx: Float = 0f,
+    val shadowDy: Float = 0f,
+    val textAlignment: String = "LEFT"
 )
 
 /** Urutan list = urutan layer (elemen terakhir ada di paling atas). */
@@ -96,6 +106,16 @@ object HudStore {
                     .put("color", it.color)
                     .put("fontFamily", it.fontFamily)
                     .put("webTouchable", it.webTouchable)
+                    .put("fontWeight", it.fontWeight)
+                    .put("italic", it.italic)
+                    .put("underline", it.underline)
+                    .put("outlineColor", it.outlineColor)
+                    .put("outlineWidth", it.outlineWidth.toDouble())
+                    .put("shadowColor", it.shadowColor)
+                    .put("shadowBlur", it.shadowBlur.toDouble())
+                    .put("shadowDx", it.shadowDx.toDouble())
+                    .put("shadowDy", it.shadowDy.toDouble())
+                    .put("textAlignment", it.textAlignment)
             )
         }
         return arr
@@ -122,7 +142,17 @@ object HudStore {
                 alpha = o.getDouble("alpha").toFloat(),
                 color = o.getInt("color"),
                 fontFamily = o.optString("fontFamily", "DEFAULT"),
-                webTouchable = o.optBoolean("webTouchable", false)
+                webTouchable = o.optBoolean("webTouchable", false),
+                fontWeight = o.optString("fontWeight", "REGULAR"),
+                italic = o.optBoolean("italic", false),
+                underline = o.optBoolean("underline", false),
+                outlineColor = o.optInt("outlineColor", 0xFF000000.toInt()),
+                outlineWidth = o.optDouble("outlineWidth", 0.0).toFloat(),
+                shadowColor = o.optInt("shadowColor", 0x99000000.toInt()),
+                shadowBlur = o.optDouble("shadowBlur", 0.0).toFloat(),
+                shadowDx = o.optDouble("shadowDx", 0.0).toFloat(),
+                shadowDy = o.optDouble("shadowDy", 0.0).toFloat(),
+                textAlignment = o.optString("textAlignment", "LEFT")
             )
         }
     }
