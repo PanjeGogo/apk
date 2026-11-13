@@ -31,6 +31,7 @@ data class HudItem(
     val color: Int,
     val fontFamily: String = "DEFAULT",
     val webTouchable: Boolean = false,
+    val webAspectRatio: String = "16:9",
     val fontWeight: String = "REGULAR",
     val italic: Boolean = false,
     val underline: Boolean = false,
@@ -123,6 +124,7 @@ object HudStore {
                     .put("color", it.color)
                     .put("fontFamily", it.fontFamily)
                     .put("webTouchable", it.webTouchable)
+                    .put("webAspectRatio", it.webAspectRatio)
                     .put("fontWeight", it.fontWeight)
                     .put("italic", it.italic)
                     .put("underline", it.underline)
@@ -160,6 +162,7 @@ object HudStore {
                 color = o.getInt("color"),
                 fontFamily = o.optString("fontFamily", "DEFAULT"),
                 webTouchable = o.optBoolean("webTouchable", false),
+                webAspectRatio = o.optString("webAspectRatio", "16:9"),
                 fontWeight = o.optString("fontWeight", "REGULAR"),
                 italic = o.optBoolean("italic", false),
                 underline = o.optBoolean("underline", false),
