@@ -105,12 +105,14 @@ class MainActivity : ComponentActivity() {
                                 onProfileChange = { profile = it },
                                 modifier = Modifier.fillMaxSize()
                             )
-                        } else {
+                        } else if (tab == 1) {
                             MusicScreen(
                                 canDraw = canDraw,
                                 onNeedPermission = { showInfo = true },
                                 modifier = Modifier.fillMaxSize()
                             )
+                        } else {
+                            SettingsScreen(modifier = Modifier.fillMaxSize())
                         }
                     }
                 }
