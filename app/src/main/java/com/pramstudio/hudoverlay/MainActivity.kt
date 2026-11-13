@@ -70,8 +70,8 @@ class MainActivity : ComponentActivity() {
                 var showPatchNotes by remember { mutableStateOf(false) }
                 androidx.compose.runtime.LaunchedEffect(Unit) {
                     val prefs = HudStore.prefs(this@MainActivity)
-                    if (prefs.getString("shown_patch_version", "") != "2.1.1") {
-                        prefs.edit().putString("shown_patch_version", "2.1.1").apply()
+                    if (prefs.getString("shown_patch_version", "") != "2.2.0") {
+                        prefs.edit().putString("shown_patch_version", "2.2.0").apply()
                         showPatchNotes = true
                     }
                 }
