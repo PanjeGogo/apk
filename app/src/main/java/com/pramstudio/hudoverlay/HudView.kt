@@ -186,7 +186,10 @@ class HudView(context: Context) : FrameLayout(context) {
                 v.measure(MeasureSpec.UNSPECIFIED, MeasureSpec.UNSPECIFIED)
             } else if (v is WebView) {
                 val tw = (e.item.size * minSide).roundToInt().coerceAtLeast(1)
-                val th = (tw * 9f / 16f).roundToInt().coerceAtLeast(1)
+                val parts = e.item.webAspectRatio.split(":")
+                val ratio = (parts.getOrNull(0)?.toFloatOrNull() ?: 16f) /
+                    (parts.getOrNull(1)?.toFloatOrNull() ?: 9f)
+                val th = (tw / ratio).roundToInt().coerceAtLeast(1)
                 v.measure(
                     MeasureSpec.makeMeasureSpec(tw, MeasureSpec.EXACTLY),
                     MeasureSpec.makeMeasureSpec(th, MeasureSpec.EXACTLY)
