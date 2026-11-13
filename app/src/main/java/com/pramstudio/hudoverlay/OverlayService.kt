@@ -18,6 +18,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.webkit.WebView
+import android.widget.FrameLayout
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,8 +61,16 @@ class OverlayService : Service() {
         }
     }
 
-    /** Jendela kecil khusus satu Web Overlay yang touchable. */
-    private class WebWin(val view: WebView, val params: WindowManager.LayoutParams, val url: String)
+    /**
+     * Jendela kecil khusus satu Web Overlay yang touchable. Jendela berisi container seukuran
+     * tampilan, dan WebView di dalamnya berukuran kanvas virtual lalu diskalakan.
+     */
+    private class WebWin(
+        val container: FrameLayout,
+        val web: WebView,
+        val params: WindowManager.LayoutParams,
+        val url: String
+    )
 
     private lateinit var windowManager: WindowManager
     private lateinit var music: MusicPlayer
@@ -148,7 +157,8 @@ class OverlayService : Service() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT
         )
         // Android 12+: sentuhan hanya tembus ke app lain kalau opacity jendela <= 0.8.
@@ -201,14 +211,17 @@ class OverlayService : Service() {
         }
 
         val minSide = min(w, h)
+        val density = resources.displayMetrics.density
         for (item in wanted) {
             val address = normalizeWebUrl(item.url)
             if (address == null) {
                 webWindows.remove(item.id)?.let { removeWebWindow(it) }
                 continue
             }
+            val ratio = aspectRatioOf(item.webAspectRatio)
             val tw = (item.size * minSide).roundToInt().coerceIn(1, MAX_WINDOW_PX)
-            val th = (tw / aspectRatioOf(item.webAspectRatio)).roundToInt().coerceIn(1, MAX_WINDOW_PX)
+            val th = (tw / ratio).roundToInt().coerceIn(1, MAX_WINDOW_PX)
+            val canvas = webCanvasFor(density, ratio, tw.toFloat())
             val px = (item.x * w).roundToInt()
             val py = (item.y * h).roundToInt()
 
@@ -218,9 +231,16 @@ class OverlayService : Service() {
                 existing.params.height = th
                 existing.params.x = px
                 existing.params.y = py
-                existing.view.visibility = if (paused) View.GONE else View.VISIBLE
+                val lp = existing.web.layoutParams
+                if (lp.width != canvas.widthPx || lp.height != canvas.heightPx) {
+                    lp.width = canvas.widthPx
+                    lp.height = canvas.heightPx
+                    existing.web.layoutParams = lp
+                }
+                applyWebScale(existing.web, canvas.scale)
+                existing.container.visibility = if (paused) View.GONE else View.VISIBLE
                 try {
-                    windowManager.updateViewLayout(existing.view, existing.params)
+                    windowManager.updateViewLayout(existing.container, existing.params)
                 } catch (_: Exception) {
                 }
                 continue
@@ -230,7 +250,11 @@ class OverlayService : Service() {
                 webWindows.remove(item.id)
             }
 
-            val view = createOverlayWebView(this, address)
+            val web = createOverlayWebView(this, address)
+            val container = FrameLayout(this)
+            container.addView(web, FrameLayout.LayoutParams(canvas.widthPx, canvas.heightPx))
+            applyWebScale(web, canvas.scale)
+            container.visibility = if (paused) View.GONE else View.VISIBLE
             val params = WindowManager.LayoutParams(
                 tw,
                 th,
@@ -246,23 +270,22 @@ class OverlayService : Service() {
             params.y = py
             params.layoutInDisplayCutoutMode =
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-            view.visibility = if (paused) View.GONE else View.VISIBLE
             try {
-                windowManager.addView(view, params)
-                webWindows[item.id] = WebWin(view, params, address)
+                windowManager.addView(container, params)
+                webWindows[item.id] = WebWin(container, web, params, address)
             } catch (e: Exception) {
-                destroyOverlayWebView(view)
+                destroyOverlayWebView(web)
             }
         }
     }
 
     private fun removeWebWindow(win: WebWin) {
         try {
-            windowManager.removeView(win.view)
+            windowManager.removeView(win.container)
         } catch (e: Exception) {
             // jendela sudah tidak terpasang
         }
-        destroyOverlayWebView(win.view)
+        destroyOverlayWebView(win.web)
     }
 
     private fun removeAllWebWindows() {
@@ -274,7 +297,7 @@ class OverlayService : Service() {
         paused = value
         hud?.visibility = if (paused) View.GONE else View.VISIBLE
         webWindows.values.forEach {
-            it.view.visibility = if (paused) View.GONE else View.VISIBLE
+            it.container.visibility = if (paused) View.GONE else View.VISIBLE
         }
         updateNotification()
     }
