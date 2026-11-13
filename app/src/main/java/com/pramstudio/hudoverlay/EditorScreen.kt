@@ -26,6 +26,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -53,6 +55,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -85,6 +90,9 @@ fun EditorScreen(
     var webDialog by remember { mutableStateOf(false) }
     var webUrl by remember { mutableStateOf("https://") }
     var webEditId by remember { mutableStateOf<Long?>(null) }
+    var fontMenu by remember { mutableStateOf(false) }
+    var colorDialog by remember { mutableStateOf(false) }
+    var hexColor by remember { mutableStateOf("#FFFFFF") }
 
     // Simpan dengan jeda singkat supaya tidak menulis tiap frame saat menggeser,
     // dan simpan sekali lagi saat layar ditutup (misalnya pindah tab).
@@ -312,26 +320,42 @@ fun EditorScreen(
                             )
                             SoftChip("Edit", onClick = { editing = true })
                         }
-                        SectionLabel("Warna")
+                        SectionLabel("Font")
+                        Box {
+                            SoftChip(
+                                "Font: " + fontLabel(selected.fontFamily),
+                                onClick = { fontMenu = true }
+                            )
+                            DropdownMenu(expanded = fontMenu, onDismissRequest = { fontMenu = false }) {
+                                fontChoices.forEach { (key, label) ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        onClick = {
+                                            update(selected.id) { it.copy(fontFamily = key) }
+                                            fontMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                        SectionLabel("Warna teks")
                         Row(
                             Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             palette.forEach { c ->
                                 val sel = c == selected.color
                                 Box(
-                                    Modifier
-                                        .size(32.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(c))
-                                        .border(
-                                            if (sel) 3.dp else 1.dp,
-                                            if (sel) Ui.Orange else Ui.Line,
-                                            CircleShape
-                                        )
+                                    Modifier.size(32.dp).clip(CircleShape).background(Color(c))
+                                        .border(if (sel) 3.dp else 1.dp, if (sel) Ui.Orange else Ui.Line, CircleShape)
                                         .clickable { update(selected.id) { it.copy(color = c) } }
                                 )
                             }
+                            SoftChip("HEX", onClick = {
+                                hexColor = String.format("#%06X", 0xFFFFFF and selected.color)
+                                colorDialog = true
+                            })
                         }
                     } else if (isWeb) {
                         SectionLabel("Web Overlay")
@@ -354,10 +378,11 @@ fun EditorScreen(
                     }
 
                     SectionLabel(if (isWeb) "Lebar Web" else "Ukuran")
-                    StepSlider(
-                        value = selected.size,
-                        onChange = { v -> update(selected.id) { it.copy(size = v) } },
-                        range = if (isText) 0.02f..0.15f else if (isWeb) 0.2f..0.95f else 0.08f..0.9f
+                    SizeStepper(
+                        value = (selected.size * 100f).roundToInt(),
+                        min = if (isText) 2 else if (isWeb) 20 else 8,
+                        max = if (isText) 15 else if (isWeb) 95 else 90,
+                        onChange = { v -> update(selected.id) { it.copy(size = v / 100f) } }
                     )
                     SectionLabel("Opacity")
                     StepSlider(
@@ -374,6 +399,41 @@ fun EditorScreen(
                 }
             }
         }
+    }
+
+
+    if (colorDialog && selected != null && selected.type == ItemType.TEXT) {
+        AlertDialog(
+            onDismissRequest = { colorDialog = false },
+            title = { Text("Warna teks (HEX)") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = hexColor,
+                        onValueChange = { hexColor = it },
+                        singleLine = true,
+                        label = { Text("Kode HEX") },
+                        placeholder = { Text("#RRGGBB") }
+                    )
+                    val parsed = parseHexColor(hexColor)
+                    Box(
+                        Modifier.fillMaxWidth().heightIn(min = 42.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(parsed?.let { Color(it) } ?: Ui.Line)
+                    )
+                    Text("Contoh: #FFFFFF, #FF9800, atau #AARRGGBB", color = Ui.Muted, fontSize = 12.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    parseHexColor(hexColor)?.let { value ->
+                        update(selected.id) { it.copy(color = value) }
+                        colorDialog = false
+                    }
+                }) { Text("Terapkan") }
+            },
+            dismissButton = { TextButton(onClick = { colorDialog = false }) { Text("Batal") } }
+        )
     }
 
     if (webDialog) {
@@ -479,6 +539,7 @@ private fun CanvasItem(
             color = Color(item.color).copy(alpha = item.alpha),
             fontSize = with(density) { (item.size * minSide).toSp() },
             softWrap = false,
+            fontFamily = composeFontFamily(item.fontFamily),
             modifier = gestures
         )
     } else {
@@ -506,4 +567,57 @@ private fun CanvasItem(
             )
         }
     }
+}
+
+
+private val fontChoices = listOf(
+    "DEFAULT" to "Default",
+    "SANS_SERIF" to "Sans Serif",
+    "SERIF" to "Serif",
+    "MONOSPACE" to "Monospace",
+    "CASUAL" to "Casual",
+    "CURSIVE" to "Cursive",
+    "FANTASY" to "Fantasy",
+    "SANS_SERIF_BOLD" to "Sans Serif Bold",
+    "SERIF_BOLD" to "Serif Bold"
+)
+
+private fun fontLabel(key: String): String =
+    fontChoices.firstOrNull { it.first == key }?.second ?: "Default"
+
+private fun composeFontFamily(key: String): FontFamily = when (key) {
+    "SANS_SERIF", "SANS_SERIF_BOLD" -> FontFamily.SansSerif
+    "SERIF", "SERIF_BOLD" -> FontFamily.Serif
+    "MONOSPACE" -> FontFamily.Monospace
+    "CURSIVE" -> FontFamily.Cursive
+    else -> FontFamily.Default
+}
+
+private fun parseHexColor(raw: String): Int? {
+    val value = raw.trim().removePrefix("#")
+    if (value.length != 6 && value.length != 8) return null
+    return value.toLongOrNull(16)?.let {
+        if (value.length == 6) (0xFF000000L or it).toInt() else it.toInt()
+    }
+}
+
+@Composable
+private fun SizeStepper(value: Int, min: Int, max: Int, onChange: (Int) -> Unit) {
+    var input by remember(value) { mutableStateOf(value.toString()) }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SoftChip("−", onClick = { onChange((value - 1).coerceAtLeast(min)) })
+        OutlinedTextField(
+            value = input,
+            onValueChange = { raw ->
+                input = raw.filter { it.isDigit() }.take(3)
+                input.toIntOrNull()?.let { onChange(it.coerceIn(min, max)) }
+            },
+            modifier = Modifier.weight(1f),
+            singleLine = true,
+            label = { Text("Nilai ($min–$max)") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+        )
+        SoftChip("+", onClick = { onChange((value + 1).coerceAtMost(max)) })
+    }
+    Text("Rentang ukuran: $min–$max% dari sisi layar terpendek", color = Ui.Muted, fontSize = 11.sp)
 }
