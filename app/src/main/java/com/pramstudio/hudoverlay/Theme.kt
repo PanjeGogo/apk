@@ -14,6 +14,9 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,9 +31,18 @@ import androidx.compose.ui.unit.sp
 
 /** Warna dan komponen kecil yang dipakai di semua layar (gaya terang dengan aksen oranye). */
 object Ui {
-    val Orange = Color(0xFFFF9800)
-    val OrangeDark = Color(0xFFF57C00)
-    val OrangeSoft = Color(0xFFFFE9C7)
+    var Orange by mutableStateOf(Color(0xFFFF9800))
+        private set
+    var OrangeDark by mutableStateOf(Color(0xFFF57C00))
+        private set
+    var OrangeSoft by mutableStateOf(Color(0xFFFFE9C7))
+        private set
+
+    fun setAccent(argb: Int) {
+        Orange = Color(argb)
+        OrangeDark = Color(argb).copy(red = (Color(argb).red * 0.82f).coerceIn(0f, 1f))
+        OrangeSoft = Color(argb).copy(alpha = 0.20f)
+    }
     val Bg = Color(0xFFF4F4F6)
     val Ink = Color(0xFF212121)
     val Muted = Color(0xFF757575)
