@@ -69,8 +69,8 @@ class MainActivity : ComponentActivity() {
                 var showPatchNotes by remember { mutableStateOf(false) }
                 androidx.compose.runtime.LaunchedEffect(Unit) {
                     val prefs = HudStore.prefs(this@MainActivity)
-                    if (prefs.getString("shown_patch_version", "") != "2.1.0") {
-                        prefs.edit().putString("shown_patch_version", "2.1.0").apply()
+                    if (prefs.getString("shown_patch_version", "") != "2.1.1") {
+                        prefs.edit().putString("shown_patch_version", "2.1.1").apply()
                         showPatchNotes = true
                     }
                 }
@@ -119,7 +119,7 @@ class MainActivity : ComponentActivity() {
                         onDismissRequest = { showPatchNotes = false },
                         title = {
                             Column {
-                                Text("Overlay aja v2.1.0")
+                                Text("Overlay aja v2.1.1")
                                 Text(
                                     buildAnnotatedString {
                                         append("By: ")
@@ -138,25 +138,34 @@ class MainActivity : ComponentActivity() {
                                     .height(320.dp)
                                     .verticalScroll(rememberScrollState())
                             ) {
-                                Text("VERSI 2.1.0 • TERBARU", fontWeight = FontWeight.Bold)
+                                Text("VERSI 2.1.1 • TERBARU", fontWeight = FontWeight.Bold)
                                 Text(
-                                    "• Web Overlay dengan JavaScript aktif\n" +
-                                        "• Background WebView transparan untuk alert donasi\n" +
-                                        "• Sentuhan tetap diteruskan ke game\n" +
-                                        "• URL alert dapat diatur dari editor\n" +
-                                        "• Teks dan gambar/GIF tetap tersedia"
+                                    "• Ukuran elemen memakai input angka dengan tombol minus dan plus\\n" +
+                                        "• Pilihan berbagai jenis font untuk text overlay\\n" +
+                                        "• Pemilih warna teks menggunakan kode HEX\\n" +
+                                        "• Pengaturan font dan warna disimpan per elemen"
                                 )
                                 Text(
-                                    "RIWAYAT VERSI SEBELUMNYA",
+                                    "VERSI 2.1.0 • SEBELUMNYA",
                                     modifier = Modifier.padding(top = 16.dp),
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    "Versi sebelumnya\n" +
-                                        "• Editor overlay dengan pengaturan posisi, ukuran, opacity, warna, dan layer\n" +
-                                        "• Dukungan gambar dan GIF\n" +
-                                        "• Pemutar musik dengan playlist dan auto repeat\n" +
-                                        "• Tampilan aplikasi dengan tab Editor dan Musik"
+                                    "• Web Overlay dengan JavaScript aktif\\n" +
+                                        "• Background WebView transparan untuk alert donasi\\n" +
+                                        "• Sentuhan tetap diteruskan ke game\\n" +
+                                        "• URL alert dapat diatur dari editor"
+                                )
+                                Text(
+                                    "VERSI 0.4.0 • VERSI AWAL",
+                                    modifier = Modifier.padding(top = 16.dp),
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    "• Editor overlay teks dan gambar\\n" +
+                                        "• Pengaturan posisi, ukuran, opacity, warna, dan layer\\n" +
+                                        "• Dukungan gambar/GIF dan pemutar musik\\n" +
+                                        "• Pengaturan profil Portrait dan Landscape"
                                 )
                             }
                         },
