@@ -64,6 +64,7 @@ class MainActivity : ComponentActivity() {
             HudTheme {
                 val running by OverlayService.running.collectAsState()
                 var tab by remember { mutableStateOf(0) }
+                androidx.compose.runtime.LaunchedEffect(Unit) { Ui.setAccent(HudStore.prefs(this@MainActivity).getInt("app_color", 0xFFFF9800.toInt())) }
                 var profile by remember { mutableStateOf(Profile.PORTRAIT) }
                 var showInfo by remember { mutableStateOf(false) }
                 var showPatchNotes by remember { mutableStateOf(false) }
@@ -119,7 +120,7 @@ class MainActivity : ComponentActivity() {
                         onDismissRequest = { showPatchNotes = false },
                         title = {
                             Column {
-                                Text("Overlay aja v2.1.1")
+                                Text("Overlay aja v2.2.0")
                                 Text(
                                     buildAnnotatedString {
                                         append("By: ")
@@ -259,7 +260,7 @@ private fun TopBar(running: Boolean, onToggle: () -> Unit) {
 
 @Composable
 private fun TabBar(selected: Int, onSelect: (Int) -> Unit) {
-    val labels = listOf("Editor", "Musik")
+    val labels = listOf("Editor", "Musik", "Pengaturan")
     Row(
         Modifier
             .fillMaxWidth()
