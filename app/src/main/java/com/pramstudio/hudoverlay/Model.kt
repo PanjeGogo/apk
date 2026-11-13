@@ -29,7 +29,8 @@ data class HudItem(
     val size: Float,
     val alpha: Float,
     val color: Int,
-    val fontFamily: String = "DEFAULT"
+    val fontFamily: String = "DEFAULT",
+    val webTouchable: Boolean = false
 )
 
 /** Urutan list = urutan layer (elemen terakhir ada di paling atas). */
@@ -94,6 +95,7 @@ object HudStore {
                     .put("alpha", it.alpha.toDouble())
                     .put("color", it.color)
                     .put("fontFamily", it.fontFamily)
+                    .put("webTouchable", it.webTouchable)
             )
         }
         return arr
@@ -119,7 +121,8 @@ object HudStore {
                 size = o.getDouble("size").toFloat(),
                 alpha = o.getDouble("alpha").toFloat(),
                 color = o.getInt("color"),
-                fontFamily = o.optString("fontFamily", "DEFAULT")
+                fontFamily = o.optString("fontFamily", "DEFAULT"),
+                webTouchable = o.optBoolean("webTouchable", false)
             )
         }
     }
