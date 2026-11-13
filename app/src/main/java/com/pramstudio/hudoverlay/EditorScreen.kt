@@ -93,6 +93,9 @@ fun EditorScreen(
     var webEditId by remember { mutableStateOf<Long?>(null) }
     var fontMenu by remember { mutableStateOf(false) }
     var webSizeMenu by remember { mutableStateOf(false) }
+    var weightMenu by remember { mutableStateOf(false) }
+    var alignMenu by remember { mutableStateOf(false) }
+    var hexTarget by remember { mutableStateOf("TEXT") }
     var colorDialog by remember { mutableStateOf(false) }
     var hexColor by remember { mutableStateOf("#FFFFFF") }
 
@@ -355,10 +358,67 @@ fun EditorScreen(
                                 )
                             }
                             SoftChip("HEX", onClick = {
+                                hexTarget = "TEXT"
                                 hexColor = String.format("#%06X", 0xFFFFFF and selected.color)
                                 colorDialog = true
                             })
                         }
+                        SectionLabel("Font Weight")
+                        Box {
+                            SoftChip("Weight: " + selected.fontWeight.replace("_", " "), onClick = { weightMenu = true })
+                            DropdownMenu(expanded = weightMenu, onDismissRequest = { weightMenu = false }) {
+                                listOf("REGULAR", "MEDIUM", "BOLD", "EXTRA_BOLD").forEach { weight ->
+                                    DropdownMenuItem(text = { Text(weight.replace("_", " ")) }, onClick = {
+                                        update(selected.id) { it.copy(fontWeight = weight) }
+                                        weightMenu = false
+                                    })
+                                }
+                            }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = selected.italic, onCheckedChange = { v -> update(selected.id) { it.copy(italic = v) } })
+                            Text("Italic")
+                            Checkbox(checked = selected.underline, onCheckedChange = { v -> update(selected.id) { it.copy(underline = v) } })
+                            Text("Underline")
+                        }
+                        SectionLabel("Text Alignment")
+                        Box {
+                            SoftChip("Alignment: " + selected.textAlignment, onClick = { alignMenu = true })
+                            DropdownMenu(expanded = alignMenu, onDismissRequest = { alignMenu = false }) {
+                                listOf("LEFT", "CENTER", "RIGHT").forEach { align ->
+                                    DropdownMenuItem(text = { Text(align) }, onClick = {
+                                        update(selected.id) { it.copy(textAlignment = align) }
+                                        alignMenu = false
+                                    })
+                                }
+                            }
+                        }
+                        SectionLabel("Outline / Stroke")
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Ketebalan", modifier = Modifier.weight(1f), color = Ui.Ink)
+                            Text(String.format("%.1f", selected.outlineWidth), color = Ui.Muted)
+                            SoftChip("HEX", onClick = {
+                                hexTarget = "OUTLINE"
+                                hexColor = String.format("#%06X", 0xFFFFFF and selected.outlineColor)
+                                colorDialog = true
+                            })
+                        }
+                        StepSlider(value = selected.outlineWidth, onChange = { v -> update(selected.id) { it.copy(outlineWidth = v) } }, range = 0f..6f)
+                        SectionLabel("Shadow")
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Warna shadow", modifier = Modifier.weight(1f), color = Ui.Ink)
+                            SoftChip("HEX", onClick = {
+                                hexTarget = "SHADOW"
+                                hexColor = String.format("#%06X", 0xFFFFFF and selected.shadowColor)
+                                colorDialog = true
+                            })
+                        }
+                        Text("Blur", color = Ui.Muted, fontSize = 12.sp)
+                        StepSlider(value = selected.shadowBlur, onChange = { v -> update(selected.id) { it.copy(shadowBlur = v) } }, range = 0f..24f)
+                        Text("Posisi horizontal", color = Ui.Muted, fontSize = 12.sp)
+                        StepSlider(value = selected.shadowDx, onChange = { v -> update(selected.id) { it.copy(shadowDx = v) } }, range = -12f..12f)
+                        Text("Posisi vertikal", color = Ui.Muted, fontSize = 12.sp)
+                        StepSlider(value = selected.shadowDy, onChange = { v -> update(selected.id) { it.copy(shadowDy = v) } }, range = -12f..12f)
                     } else if (isWeb) {
                         SectionLabel("Web Overlay")
                         Text(selected.url, color = Ui.Ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -439,7 +499,7 @@ fun EditorScreen(
     if (colorDialog && selected != null && selected.type == ItemType.TEXT) {
         AlertDialog(
             onDismissRequest = { colorDialog = false },
-            title = { Text("Warna teks (HEX)") },
+            title = { Text(if (hexTarget == "TEXT") "Warna teks (HEX)" else if (hexTarget == "OUTLINE") "Warna outline (HEX)" else "Warna shadow (HEX)") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
@@ -461,7 +521,13 @@ fun EditorScreen(
             confirmButton = {
                 TextButton(onClick = {
                     parseHexColor(hexColor)?.let { value ->
-                        update(selected.id) { it.copy(color = value) }
+                        update(selected.id) {
+                            when (hexTarget) {
+                                "OUTLINE" -> it.copy(outlineColor = value)
+                                "SHADOW" -> it.copy(shadowColor = value)
+                                else -> it.copy(color = value)
+                            }
+                        }
                         colorDialog = false
                     }
                 }) { Text("Terapkan") }
