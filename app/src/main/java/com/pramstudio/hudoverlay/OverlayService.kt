@@ -14,12 +14,16 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
+import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import android.webkit.WebView
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 class OverlayService : Service() {
 
@@ -34,6 +38,7 @@ class OverlayService : Service() {
         private const val EXTRA_INDEX = "index"
         private const val CHANNEL_ID = "hud_overlay"
         private const val NOTIF_ID = 1
+        private const val MAX_WINDOW_PX = 16384
 
         private val _running = MutableStateFlow(false)
         val running: StateFlow<Boolean> = _running
@@ -55,11 +60,20 @@ class OverlayService : Service() {
         }
     }
 
+    /** Jendela kecil khusus satu Web Overlay yang touchable. */
+    private class WebWin(val view: WebView, val params: WindowManager.LayoutParams, val url: String)
+
     private lateinit var windowManager: WindowManager
     private lateinit var music: MusicPlayer
     private var hud: HudView? = null
-    private var overlayParams: WindowManager.LayoutParams? = null
     private var paused = false
+
+    // Web Overlay touchable: jendela sendiri seukuran areanya, jadi sentuhan di luar area web
+    // tetap tembus ke game. Jendela utama (layar penuh) selalu NOT_TOUCHABLE.
+    private val webWindows = HashMap<Long, WebWin>()
+    private var touchWebItems: List<HudItem> = emptyList()
+    private var screenW = 0
+    private var screenH = 0
 
     // Editor dan layar musik menyimpan ke prefs -> service langsung ikut berubah.
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -106,7 +120,9 @@ class OverlayService : Service() {
     override fun onDestroy() {
         HudStore.prefs(this).unregisterOnSharedPreferenceChangeListener(prefListener)
         music.release()
+        removeAllWebWindows()
         hud?.let {
+            it.onSized = null
             it.clear()
             try {
                 windowManager.removeView(it)
@@ -115,7 +131,6 @@ class OverlayService : Service() {
             }
         }
         hud = null
-        overlayParams = null
         _running.value = false
         super.onDestroy()
     }
@@ -142,10 +157,15 @@ class OverlayService : Service() {
         }
         params.layoutInDisplayCutoutMode =
             WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        // Ukuran layar sebenarnya dipakai untuk menempatkan jendela Web Overlay yang touchable.
+        view.onSized = { w, h ->
+            screenW = w
+            screenH = h
+            syncWebWindows()
+        }
         try {
             windowManager.addView(view, params)
             hud = view
-            overlayParams = params
             view.visibility = if (paused) View.GONE else View.VISIBLE
             refresh()
             _running.value = true
@@ -158,20 +178,104 @@ class OverlayService : Service() {
         val profile =
             if (orientation == Configuration.ORIENTATION_LANDSCAPE) Profile.LANDSCAPE
             else Profile.PORTRAIT
-        hud?.setItems(HudStore.load(this).items(profile))
-        overlayParams?.let { params ->
-            val touchable = hud?.hasTouchableWeb() == true
-            val base = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-            params.flags = base or if (touchable) 0 else WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-            try { hud?.let { windowManager.updateViewLayout(it, params) } } catch (_: Exception) { }
+        val items = HudStore.load(this).items(profile)
+        touchWebItems = items.filter { it.type == ItemType.WEB && it.webTouchable }
+        hud?.setItems(items.filterNot { it.type == ItemType.WEB && it.webTouchable })
+        syncWebWindows()
+    }
+
+    /** Samakan jendela Web Overlay touchable dengan daftar elemen terbaru. */
+    private fun syncWebWindows() {
+        val w = screenW
+        val h = screenH
+        val wanted = if (w > 0 && h > 0) touchWebItems else emptyList()
+        val keep = wanted.map { it.id }.toSet()
+
+        val iter = webWindows.entries.iterator()
+        while (iter.hasNext()) {
+            val e = iter.next()
+            if (e.key !in keep) {
+                removeWebWindow(e.value)
+                iter.remove()
+            }
         }
+
+        val minSide = min(w, h)
+        for (item in wanted) {
+            val address = normalizeWebUrl(item.url)
+            if (address == null) {
+                webWindows.remove(item.id)?.let { removeWebWindow(it) }
+                continue
+            }
+            val tw = (item.size * minSide).roundToInt().coerceIn(1, MAX_WINDOW_PX)
+            val th = (tw / aspectRatioOf(item.webAspectRatio)).roundToInt().coerceIn(1, MAX_WINDOW_PX)
+            val px = (item.x * w).roundToInt()
+            val py = (item.y * h).roundToInt()
+
+            val existing = webWindows[item.id]
+            if (existing != null && existing.url == address) {
+                existing.params.width = tw
+                existing.params.height = th
+                existing.params.x = px
+                existing.params.y = py
+                existing.view.visibility = if (paused) View.GONE else View.VISIBLE
+                try {
+                    windowManager.updateViewLayout(existing.view, existing.params)
+                } catch (_: Exception) {
+                }
+                continue
+            }
+            if (existing != null) {
+                removeWebWindow(existing)
+                webWindows.remove(item.id)
+            }
+
+            val view = createOverlayWebView(this, address)
+            val params = WindowManager.LayoutParams(
+                tw,
+                th,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                    WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+                PixelFormat.TRANSLUCENT
+            )
+            params.gravity = Gravity.TOP or Gravity.START
+            params.x = px
+            params.y = py
+            params.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            view.visibility = if (paused) View.GONE else View.VISIBLE
+            try {
+                windowManager.addView(view, params)
+                webWindows[item.id] = WebWin(view, params, address)
+            } catch (e: Exception) {
+                destroyOverlayWebView(view)
+            }
+        }
+    }
+
+    private fun removeWebWindow(win: WebWin) {
+        try {
+            windowManager.removeView(win.view)
+        } catch (e: Exception) {
+            // jendela sudah tidak terpasang
+        }
+        destroyOverlayWebView(win.view)
+    }
+
+    private fun removeAllWebWindows() {
+        webWindows.values.forEach { removeWebWindow(it) }
+        webWindows.clear()
     }
 
     private fun setPaused(value: Boolean) {
         paused = value
         hud?.visibility = if (paused) View.GONE else View.VISIBLE
+        webWindows.values.forEach {
+            it.view.visibility = if (paused) View.GONE else View.VISIBLE
+        }
         updateNotification()
     }
 

@@ -58,11 +58,18 @@ object HudStore {
     fun prefs(ctx: Context): SharedPreferences =
         ctx.applicationContext.getSharedPreferences("hud_overlay", Context.MODE_PRIVATE)
 
+    /**
+     * Membaca layout tersimpan. Elemen yang rusak dilewati satu per satu,
+     * jadi satu elemen bermasalah tidak lagi membuat seluruh layout kembali ke default.
+     */
     fun load(ctx: Context): HudLayout {
         val raw = prefs(ctx).getString(KEY_LAYOUT, null) ?: return defaultLayout()
         return try {
             val o = JSONObject(raw)
-            HudLayout(decode(o.optJSONArray("portrait")), decode(o.optJSONArray("landscape")))
+            HudLayout(
+                decodeLenient(o.optJSONArray("portrait")),
+                decodeLenient(o.optJSONArray("landscape"))
+            )
         } catch (e: Exception) {
             defaultLayout()
         }
@@ -140,41 +147,56 @@ object HudStore {
         return arr
     }
 
-    fun decode(arr: JSONArray?): List<HudItem> {
+    /** Ketat: satu elemen rusak melempar exception (dipakai untuk validasi import). */
+    fun decode(arr: JSONArray?): List<HudItem> = decodeInternal(arr, strict = true)
+
+    /** Toleran: elemen rusak dilewati (dipakai saat membaca layout tersimpan). */
+    fun decodeLenient(arr: JSONArray?): List<HudItem> = decodeInternal(arr, strict = false)
+
+    private fun decodeInternal(arr: JSONArray?, strict: Boolean): List<HudItem> {
         if (arr == null) return emptyList()
-        return (0 until arr.length()).map { i ->
-            val o = arr.getJSONObject(i)
-            val type = try {
-                ItemType.valueOf(o.optString("type", "TEXT"))
+        val out = ArrayList<HudItem>(arr.length())
+        for (i in 0 until arr.length()) {
+            try {
+                out.add(decodeItem(arr.getJSONObject(i)))
             } catch (e: Exception) {
-                ItemType.TEXT
+                if (strict) throw e
             }
-            HudItem(
-                id = o.getLong("id"),
-                type = type,
-                text = o.optString("text", ""),
-                path = o.optString("path", ""),
-                url = o.optString("url", ""),
-                x = o.getDouble("x").toFloat(),
-                y = o.getDouble("y").toFloat(),
-                size = o.getDouble("size").toFloat(),
-                alpha = o.getDouble("alpha").toFloat(),
-                color = o.getInt("color"),
-                fontFamily = o.optString("fontFamily", "DEFAULT"),
-                webTouchable = o.optBoolean("webTouchable", false),
-                webAspectRatio = o.optString("webAspectRatio", "16:9"),
-                fontWeight = o.optString("fontWeight", "REGULAR"),
-                italic = o.optBoolean("italic", false),
-                underline = o.optBoolean("underline", false),
-                outlineColor = o.optInt("outlineColor", 0xFF000000.toInt()),
-                outlineWidth = o.optDouble("outlineWidth", 0.0).toFloat(),
-                shadowColor = o.optInt("shadowColor", 0x99000000.toInt()),
-                shadowBlur = o.optDouble("shadowBlur", 0.0).toFloat(),
-                shadowDx = o.optDouble("shadowDx", 0.0).toFloat(),
-                shadowDy = o.optDouble("shadowDy", 0.0).toFloat(),
-                textAlignment = o.optString("textAlignment", "LEFT")
-            )
         }
+        return out
+    }
+
+    private fun decodeItem(o: JSONObject): HudItem {
+        val type = try {
+            ItemType.valueOf(o.optString("type", "TEXT"))
+        } catch (e: Exception) {
+            ItemType.TEXT
+        }
+        return HudItem(
+            id = o.getLong("id"),
+            type = type,
+            text = o.optString("text", ""),
+            path = o.optString("path", ""),
+            url = o.optString("url", ""),
+            x = o.getDouble("x").toFloat(),
+            y = o.getDouble("y").toFloat(),
+            size = o.getDouble("size").toFloat(),
+            alpha = o.getDouble("alpha").toFloat(),
+            color = o.getInt("color"),
+            fontFamily = o.optString("fontFamily", "DEFAULT"),
+            webTouchable = o.optBoolean("webTouchable", false),
+            webAspectRatio = o.optString("webAspectRatio", "16:9"),
+            fontWeight = o.optString("fontWeight", "REGULAR"),
+            italic = o.optBoolean("italic", false),
+            underline = o.optBoolean("underline", false),
+            outlineColor = o.optInt("outlineColor", 0xFF000000.toInt()),
+            outlineWidth = o.optDouble("outlineWidth", 0.0).toFloat(),
+            shadowColor = o.optInt("shadowColor", 0x99000000.toInt()),
+            shadowBlur = o.optDouble("shadowBlur", 0.0).toFloat(),
+            shadowDx = o.optDouble("shadowDx", 0.0).toFloat(),
+            shadowDy = o.optDouble("shadowDy", 0.0).toFloat(),
+            textAlignment = o.optString("textAlignment", "LEFT")
+        )
     }
 }
 
