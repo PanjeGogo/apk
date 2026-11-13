@@ -3,6 +3,9 @@ package com.pramstudio.hudoverlay
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.Paint
+import android.graphics.Canvas
+import android.view.Gravity
 import android.graphics.drawable.AnimatedImageDrawable
 import android.util.TypedValue
 import android.view.View
@@ -86,7 +89,7 @@ class HudView(context: Context) : FrameLayout(context) {
     }
 
     private fun createView(item: HudItem): View? {
-        if (item.type == ItemType.TEXT) return TextView(context)
+        if (item.type == ItemType.TEXT) return StyledOverlayTextView(context)
         if (item.type == ItemType.WEB) {
             val address = normalizeWebUrl(item.url) ?: return null
             return WebView(context).apply {
@@ -125,16 +128,32 @@ class HudView(context: Context) : FrameLayout(context) {
         if (v is TextView) {
             v.text = item.text
             v.setTextColor(item.color)
-            v.typeface = when (item.fontFamily) {
-                "SANS_SERIF" -> Typeface.SANS_SERIF
-                "SERIF" -> Typeface.SERIF
-                "MONOSPACE" -> Typeface.MONOSPACE
-                "CASUAL" -> Typeface.create("casual", Typeface.NORMAL)
-                "CURSIVE" -> Typeface.create("cursive", Typeface.NORMAL)
-                "FANTASY" -> Typeface.create("fantasy", Typeface.NORMAL)
-                "SANS_SERIF_BOLD" -> Typeface.create("sans-serif", Typeface.BOLD)
-                "SERIF_BOLD" -> Typeface.create("serif", Typeface.BOLD)
-                else -> Typeface.DEFAULT
+            val style = when (item.fontWeight) {
+                "MEDIUM" -> Typeface.BOLD
+                "BOLD", "EXTRA_BOLD" -> Typeface.BOLD
+                else -> Typeface.NORMAL
+            } or if (item.italic) Typeface.ITALIC else Typeface.NORMAL
+            val family = when (item.fontFamily) {
+                "SANS_SERIF" -> "sans-serif"
+                "SERIF" -> "serif"
+                "MONOSPACE" -> "monospace"
+                "CASUAL" -> "casual"
+                "CURSIVE" -> "cursive"
+                "FANTASY" -> "fantasy"
+                else -> "sans-serif"
+            }
+            v.typeface = Typeface.create(family, style)
+            v.paint.isFakeBoldText = item.fontWeight == "EXTRA_BOLD"
+            v.paintFlags = if (item.underline) v.paintFlags or Paint.UNDERLINE_TEXT_FLAG else v.paintFlags and Paint.UNDERLINE_TEXT_FLAG.inv()
+            v.gravity = when (item.textAlignment) {
+                "CENTER" -> Gravity.CENTER_HORIZONTAL
+                "RIGHT" -> Gravity.RIGHT
+                else -> Gravity.LEFT
+            }
+            v.setShadowLayer(item.shadowBlur, item.shadowDx, item.shadowDy, item.shadowColor)
+            if (v is StyledOverlayTextView) {
+                v.strokeColor = item.outlineColor
+                v.strokeWidth = item.outlineWidth
             }
         }
         // Alpha hanya diterapkan ke teks/gambar. Alpha pada WebView akan
@@ -199,5 +218,28 @@ class HudView(context: Context) : FrameLayout(context) {
             val t = (e.item.y * h).roundToInt()
             e.view.layout(l, t, l + e.view.measuredWidth, t + e.view.measuredHeight)
         }
+    }
+}
+
+
+private class StyledOverlayTextView(context: Context) : TextView(context) {
+    var strokeColor: Int = Color.BLACK
+    var strokeWidth: Float = 0f
+
+    override fun onDraw(canvas: Canvas) {
+        if (strokeWidth > 0f) {
+            val originalColor = currentTextColor
+            val originalStyle = paint.style
+            val originalStroke = paint.strokeWidth
+            setTextColor(strokeColor)
+            paint.style = Paint.Style.STROKE
+            paint.strokeJoin = Paint.Join.ROUND
+            paint.strokeWidth = strokeWidth * 2f
+            super.onDraw(canvas)
+            setTextColor(originalColor)
+            paint.style = originalStyle
+            paint.strokeWidth = originalStroke
+        }
+        super.onDraw(canvas)
     }
 }
