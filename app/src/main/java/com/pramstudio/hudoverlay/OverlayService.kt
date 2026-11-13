@@ -58,6 +58,7 @@ class OverlayService : Service() {
     private lateinit var windowManager: WindowManager
     private lateinit var music: MusicPlayer
     private var hud: HudView? = null
+    private var overlayParams: WindowManager.LayoutParams? = null
     private var paused = false
 
     // Editor dan layar musik menyimpan ke prefs -> service langsung ikut berubah.
@@ -114,6 +115,7 @@ class OverlayService : Service() {
             }
         }
         hud = null
+        overlayParams = null
         _running.value = false
         super.onDestroy()
     }
@@ -143,6 +145,7 @@ class OverlayService : Service() {
         try {
             windowManager.addView(view, params)
             hud = view
+            overlayParams = params
             view.visibility = if (paused) View.GONE else View.VISIBLE
             refresh()
             _running.value = true
@@ -156,6 +159,14 @@ class OverlayService : Service() {
             if (orientation == Configuration.ORIENTATION_LANDSCAPE) Profile.LANDSCAPE
             else Profile.PORTRAIT
         hud?.setItems(HudStore.load(this).items(profile))
+        overlayParams?.let { params ->
+            val touchable = hud?.hasTouchableWeb() == true
+            val base = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+            params.flags = base or if (touchable) 0 else WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            try { hud?.let { windowManager.updateViewLayout(it, params) } } catch (_: Exception) { }
+        }
     }
 
     private fun setPaused(value: Boolean) {
