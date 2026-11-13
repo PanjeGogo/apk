@@ -31,7 +31,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val appColors = listOf(
     "Orange" to 0xFFFF9800.toInt(),
@@ -43,36 +45,61 @@ private val appColors = listOf(
     "Cyan" to 0xFF00BCD4.toInt()
 )
 
+/** Jalankan export/import dan ubah kegagalan (termasuk kehabisan memori) jadi pesan untuk pengguna. */
+private fun runArchive(block: () -> Unit): String? = try {
+    block()
+    null
+} catch (e: OutOfMemoryError) {
+    "memori perangkat tidak cukup untuk file sebesar ini"
+} catch (e: Exception) {
+    e.message ?: "kesalahan tidak diketahui"
+}
+
 @Composable
 fun SettingsScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val appContext = remember { context.applicationContext }
     val prefs = remember { HudStore.prefs(context) }
     var selectedColor by remember { mutableStateOf(prefs.getInt("app_color", 0xFFFF9800.toInt())) }
     var menu by remember { mutableStateOf(false) }
-    val scope = remember { CoroutineScope(Dispatchers.IO) }
+    // Tetap hidup walau pengguna pindah tab saat export/import berjalan, supaya hasilnya tetap dilaporkan.
+    val scope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate) }
 
     val exportPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream")
     ) { uri ->
         if (uri != null) scope.launch {
-            try {
-                ConfigArchive.export(context, uri)
-                launch(Dispatchers.Main) { Toast.makeText(context, "Config berhasil diekspor", Toast.LENGTH_LONG).show() }
-            } catch (e: Exception) {
-                launch(Dispatchers.Main) { Toast.makeText(context, "Export gagal: ${e.message}", Toast.LENGTH_LONG).show() }
+            val error = withContext(Dispatchers.IO) {
+                runArchive { ConfigArchive.export(appContext, uri) }
             }
+            Toast.makeText(
+                appContext,
+                if (error == null) "Config berhasil diekspor" else "Export gagal: $error",
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
     val importPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) scope.launch {
-            try {
-                ConfigArchive.import(context, uri)
-                launch(Dispatchers.Main) { Toast.makeText(context, "Config berhasil diimpor", Toast.LENGTH_LONG).show() }
-            } catch (e: Exception) {
-                launch(Dispatchers.Main) { Toast.makeText(context, "Import gagal: ${e.message}", Toast.LENGTH_LONG).show() }
+            val error = withContext(Dispatchers.IO) {
+                val before = HudStore.load(appContext)
+                val err = runArchive { ConfigArchive.import(appContext, uri) }
+                if (err == null) {
+                    // Gambar dari konfigurasi lama yang tidak dipakai lagi dihapus supaya tidak menumpuk.
+                    val after = HudStore.load(appContext)
+                    (before.portrait + before.landscape)
+                        .filter { it.type == ItemType.IMAGE }
+                        .forEach { Media.deleteIfUnused(it.path, after) }
+                }
+                err
             }
+            Toast.makeText(
+                appContext,
+                if (error == null) "Config berhasil diimpor" else "Import gagal: $error",
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 
@@ -145,6 +172,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Import Config (.panje)") }
             Text("File .panje terenkripsi dan hanya dapat dibaca melalui fitur Import Overlay aja. Import mengganti konfigurasi yang tersimpan.", color = Color(0xFFB45309), fontSize = 11.sp)
+            Text("Hati-hati: URL Web Overlay (sering berisi token alert) ikut tersimpan di file ini dan kuncinya tertanam di aplikasi, jadi jangan bagikan file .panje ke orang yang tidak dipercaya.", color = Color(0xFFB45309), fontSize = 11.sp)
         }
     }
 }

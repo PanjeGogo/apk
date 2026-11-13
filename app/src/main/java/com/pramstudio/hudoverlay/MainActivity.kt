@@ -24,10 +24,12 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,17 +59,22 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Warna aksen dimuat sebelum UI pertama digambar, jadi status bar langsung sesuai pilihan.
+        Ui.setAccent(HudStore.prefs(this).getInt("app_color", 0xFFFF9800.toInt()))
         window.statusBarColor = Ui.OrangeDark.toArgb()
         WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
 
         setContent {
             HudTheme {
+                // Status bar mengikuti warna aksen saat diganti dari Pengaturan.
+                val statusColor = Ui.OrangeDark.toArgb()
+                SideEffect { window.statusBarColor = statusColor }
+
                 val running by OverlayService.running.collectAsState()
-                var tab by remember { mutableStateOf(0) }
-                androidx.compose.runtime.LaunchedEffect(Unit) { Ui.setAccent(HudStore.prefs(this@MainActivity).getInt("app_color", 0xFFFF9800.toInt())) }
-                var profile by remember { mutableStateOf(Profile.PORTRAIT) }
+                var tab by rememberSaveable { mutableStateOf(0) }
+                var profile by rememberSaveable { mutableStateOf(Profile.PORTRAIT) }
                 var showInfo by remember { mutableStateOf(false) }
-                var showPatchNotes by remember { mutableStateOf(true) }
+                var showPatchNotes by rememberSaveable { mutableStateOf(true) }
 
                 Column(
                     Modifier
@@ -115,7 +122,7 @@ class MainActivity : ComponentActivity() {
                         onDismissRequest = { showPatchNotes = false },
                         title = {
                             Column {
-                                Text("Overlay aja v2.2.0")
+                                Text("Overlay aja v2.2.1")
                                 Text(
                                     buildAnnotatedString {
                                         append("By: ")
@@ -134,22 +141,49 @@ class MainActivity : ComponentActivity() {
                                     .height(320.dp)
                                     .verticalScroll(rememberScrollState())
                             ) {
-                                Text("VERSI 2.1.1 • TERBARU", fontWeight = FontWeight.Bold)
+                                Text("VERSI 2.2.1 • TERBARU", fontWeight = FontWeight.Bold)
                                 Text(
-                                    "• Ukuran elemen memakai input angka dengan tombol minus dan plus\\n" +
-                                        "• Pilihan berbagai jenis font untuk text overlay\\n" +
-                                        "• Pemilih warna teks menggunakan kode HEX\\n" +
-                                        "• Pengaturan font dan warna disimpan per elemen"
+                                    "• Memutar layar tidak lagi mereset tab, profil, dan Patch Notes\n" +
+                                        "• Web Overlay touchable memakai jendela sendiri: sentuhan di luar area web tetap tembus ke game\n" +
+                                        "• Outline teks tidak lagi boros baterai dan tidak terpotong\n" +
+                                        "• Font Serif Bold dan Sans Serif Bold berfungsi, weight memakai bobot asli\n" +
+                                        "• Alignment aktif untuk teks multi-baris (edit teks bisa beberapa baris)\n" +
+                                        "• Shadow tanpa blur sekarang terlihat\n" +
+                                        "• Preview editor: Web Overlay mengikuti posisi, bold/italic/underline/alignment tampil\n" +
+                                        "• Ukuran teks bisa diketik langsung (mis. 10-15)\n" +
+                                        "• Import .panje membersihkan gambar lama dan memberi pesan jika memori kurang\n" +
+                                        "• Warna status bar mengikuti warna aksen"
                                 )
                                 Text(
-                                    "VERSI 2.1.0 • SEBELUMNYA",
+                                    "VERSI 2.2.0 • SEBELUMNYA",
                                     modifier = Modifier.padding(top = 16.dp),
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    "• Web Overlay dengan JavaScript aktif\\n" +
-                                        "• Background WebView transparan untuk alert donasi\\n" +
-                                        "• Sentuhan tetap diteruskan ke game\\n" +
+                                    "• Export/import konfigurasi .panje\n" +
+                                        "• Rasio dan ukuran Web Overlay\n" +
+                                        "• Ukuran gambar/GIF tanpa batas tetap"
+                                )
+                                Text(
+                                    "VERSI 2.1.1",
+                                    modifier = Modifier.padding(top = 16.dp),
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    "• Ukuran elemen memakai input angka dengan tombol minus dan plus\n" +
+                                        "• Pilihan berbagai jenis font untuk text overlay\n" +
+                                        "• Pemilih warna teks menggunakan kode HEX\n" +
+                                        "• Pengaturan font dan warna disimpan per elemen"
+                                )
+                                Text(
+                                    "VERSI 2.1.0",
+                                    modifier = Modifier.padding(top = 16.dp),
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    "• Web Overlay dengan JavaScript aktif\n" +
+                                        "• Background WebView transparan untuk alert donasi\n" +
+                                        "• Sentuhan tetap diteruskan ke game\n" +
                                         "• URL alert dapat diatur dari editor"
                                 )
                                 Text(
@@ -158,9 +192,9 @@ class MainActivity : ComponentActivity() {
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    "• Editor overlay teks dan gambar\\n" +
-                                        "• Pengaturan posisi, ukuran, opacity, warna, dan layer\\n" +
-                                        "• Dukungan gambar/GIF dan pemutar musik\\n" +
+                                    "• Editor overlay teks dan gambar\n" +
+                                        "• Pengaturan posisi, ukuran, opacity, warna, dan layer\n" +
+                                        "• Dukungan gambar/GIF dan pemutar musik\n" +
                                         "• Pengaturan profil Portrait dan Landscape"
                                 )
                             }
