@@ -52,7 +52,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
     val scope = remember { CoroutineScope(Dispatchers.IO) }
 
     val exportPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/zip")
+        ActivityResultContracts.CreateDocument("application/octet-stream")
     ) { uri ->
         if (uri != null) scope.launch {
             try {
@@ -135,16 +135,16 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text("Konfigurasi Overlay", color = Ui.Ink, fontWeight = FontWeight.Bold)
-            Text("Ekspor atau impor seluruh layout Portrait dan Landscape, termasuk gambar/GIF dan pengaturan elemen.", color = Ui.Muted, fontSize = 12.sp)
+            Text("Ekspor atau impor layout Portrait dan Landscape beserta gambar/GIF dalam format project khusus Overlay aja.", color = Ui.Muted, fontSize = 12.sp)
             OutlinedButton(
                 onClick = { exportPicker.launch("OverlayAja-Config.panje") },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Export Config (.panje)") }
             OutlinedButton(
-                onClick = { importPicker.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) },
+                onClick = { importPicker.launch(arrayOf("application/octet-stream", "*/*")) },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Import Config (.panje)") }
-            Text("Import akan mengganti konfigurasi overlay yang sedang tersimpan.", color = Color(0xFFB45309), fontSize = 11.sp)
+            Text("File .panje terenkripsi dan hanya dapat dibaca melalui fitur Import Overlay aja. Import mengganti konfigurasi yang tersimpan.", color = Color(0xFFB45309), fontSize = 11.sp)
         }
     }
 }
