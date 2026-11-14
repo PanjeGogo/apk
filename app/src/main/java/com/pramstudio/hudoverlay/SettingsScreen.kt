@@ -11,12 +11,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,7 +28,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -62,6 +67,8 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
     val prefs = remember { HudStore.prefs(context) }
     var selectedColor by remember { mutableStateOf(prefs.getInt("app_color", 0xFFFF9800.toInt())) }
     var menu by remember { mutableStateOf(false) }
+    val diagLines by WebDiag.lines.collectAsState()
+    val clipboard = LocalClipboardManager.current
     // Tetap hidup walau pengguna pindah tab saat export/import berjalan, supaya hasilnya tetap dilaporkan.
     val scope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate) }
 
@@ -104,7 +111,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
     }
 
     Column(
-        modifier.fillMaxSize().padding(20.dp),
+        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         Column(
@@ -173,6 +180,45 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             ) { Text("Import Config (.panje)") }
             Text("File .panje terenkripsi dan hanya dapat dibaca melalui fitur Import Overlay aja. Import mengganti konfigurasi yang tersimpan.", color = Color(0xFFB45309), fontSize = 11.sp)
             Text("Hati-hati: URL Web Overlay (sering berisi token alert) ikut tersimpan di file ini dan kuncinya tertanam di aplikasi, jadi jangan bagikan file .panje ke orang yang tidak dipercaya.", color = Color(0xFFB45309), fontSize = 11.sp)
+        }
+
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                .background(Color.White).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("Diagnosa Web Overlay", color = Ui.Ink, fontWeight = FontWeight.Bold)
+            Text(
+                "Catatan pemuatan halaman, error, dan isi halaman Web Overlay. Jalankan overlay, tunggu sekitar 20 detik (tekan Test Alert kalau perlu), lalu buka halaman ini. Kirim tangkapan layar atau hasil salin ke developer kalau Web Overlay tidak tampil.",
+                color = Ui.Muted,
+                fontSize = 12.sp
+            )
+            if (diagLines.isEmpty()) {
+                Text("Belum ada catatan.", color = Ui.Muted, fontSize = 12.sp)
+            } else {
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFF5F5F5)).padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    diagLines.forEach { line ->
+                        Text(line, color = Ui.Ink, fontSize = 10.sp)
+                    }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        clipboard.setText(AnnotatedString(diagLines.joinToString("\n")))
+                        Toast.makeText(appContext, "Catatan disalin", Toast.LENGTH_SHORT).show()
+                    },
+                    enabled = diagLines.isNotEmpty()
+                ) { Text("Salin") }
+                OutlinedButton(
+                    onClick = { WebDiag.clear() },
+                    enabled = diagLines.isNotEmpty()
+                ) { Text("Hapus catatan") }
+            }
         }
     }
 }
