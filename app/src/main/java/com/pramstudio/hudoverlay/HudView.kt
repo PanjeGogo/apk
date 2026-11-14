@@ -7,12 +7,21 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.drawable.AnimatedImageDrawable
 import android.net.Uri
+import android.net.http.SslError
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.ConsoleMessage
+import android.webkit.RenderProcessGoneDetail
+import android.webkit.SslErrorHandler
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
@@ -27,6 +36,13 @@ private const val MAX_VIEW_PX = 16384
 
 /** Lebar kanvas virtual halaman Web Overlay dalam px CSS, seperti browser source OBS. */
 const val WEB_VIRTUAL_WIDTH_CSS = 1280
+
+/**
+ * Skrip pemeriksaan isi halaman: ukuran viewport yang dilihat halaman, jumlah elemen,
+ * potongan teks, dan versi Chrome/WebView. Hasilnya dicatat ke WebDiag.
+ */
+private const val PROBE_SCRIPT =
+    """(function(){try{var b=document.body;return innerWidth+'x'+innerHeight+' dpr='+devicePixelRatio+' elemen='+document.getElementsByTagName('*').length+' html='+document.documentElement.outerHTML.length+' '+(navigator.userAgent.match(/Chrome\/[\d.]+/)||[''])[0]+' teks='+(b?b.innerText:'').replace(/\s+/g,' ').slice(0,100)}catch(e){return 'error '+e}})()"""
 
 /**
  * Ukuran WebView di kanvas virtual (px perangkat) dan skala untuk mengecilkannya ke lebar tampil.
@@ -66,8 +82,21 @@ fun aspectRatioOf(value: String): Float {
     return if (ratio.isFinite() && ratio > 0f) ratio else 16f / 9f
 }
 
-fun createOverlayWebView(context: Context, address: String): WebView =
-    WebView(context).apply {
+/** Periksa isi halaman dan catat hasilnya. Aman dipanggil walau WebView sudah dihancurkan. */
+private fun probeWebView(view: WebView, host: String) {
+    try {
+        view.evaluateJavascript(PROBE_SCRIPT) { result ->
+            WebDiag.add("Isi halaman ($host): $result")
+        }
+    } catch (e: Exception) {
+        // WebView sudah dihancurkan
+    }
+}
+
+fun createOverlayWebView(context: Context, address: String): WebView {
+    val host = Uri.parse(address).host ?: "?"
+    val web = WebView(context)
+    web.apply {
         setBackgroundColor(Color.TRANSPARENT)
         isVerticalScrollBarEnabled = false
         isHorizontalScrollBarEnabled = false
@@ -83,8 +112,72 @@ fun createOverlayWebView(context: Context, address: String): WebView =
         settings.userAgentString = settings.userAgentString
             .replace("; wv", "")
             .replace("Version/4.0 ", "")
-        loadUrl(address)
     }
+
+    web.webViewClient = object : WebViewClient() {
+        override fun onPageFinished(view: WebView?, url: String?) {
+            WebDiag.add("Selesai dimuat: $host")
+            // Periksa isi halaman setelah skrip widget sempat berjalan, dan sekali lagi agak lama kemudian.
+            view?.postDelayed({ probeWebView(view, host) }, 4000)
+            view?.postDelayed({ probeWebView(view, host) }, 15000)
+        }
+
+        override fun onReceivedError(
+            view: WebView?,
+            request: WebResourceRequest?,
+            error: WebResourceError?
+        ) {
+            val main = request?.isForMainFrame == true
+            val target = if (main) host else (request?.url?.host ?: "?")
+            val label = if (main) "GAGAL memuat halaman" else "Gagal sub-resource"
+            WebDiag.add("$label $target: ${error?.description} (${error?.errorCode})")
+        }
+
+        override fun onReceivedHttpError(
+            view: WebView?,
+            request: WebResourceRequest?,
+            errorResponse: WebResourceResponse?
+        ) {
+            val main = request?.isForMainFrame == true
+            val path = ((request?.url?.host ?: "?") + (request?.url?.path ?: "")).take(90)
+            WebDiag.add("HTTP ${errorResponse?.statusCode} ${if (main) "(halaman)" else "(sub-resource)"} $path")
+        }
+
+        override fun onReceivedSslError(
+            view: WebView?,
+            handler: SslErrorHandler?,
+            error: SslError?
+        ) {
+            WebDiag.add("Error SSL di $host (kode ${error?.primaryError})")
+            handler?.cancel()
+        }
+
+        override fun onRenderProcessGone(
+            view: WebView?,
+            detail: RenderProcessGoneDetail?
+        ): Boolean {
+            WebDiag.add("Proses render WebView mati (crash=${detail?.didCrash()}) untuk $host")
+            return true
+        }
+    }
+
+    web.webChromeClient = object : WebChromeClient() {
+        override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+            if (consoleMessage != null &&
+                consoleMessage.messageLevel() == ConsoleMessage.MessageLevel.ERROR
+            ) {
+                val source = consoleMessage.sourceId()?.substringAfterLast('/') ?: "?"
+                WebDiag.add("JS error: ${consoleMessage.message()} ($source:${consoleMessage.lineNumber()})")
+            }
+            return true
+        }
+    }
+
+    val version = WebView.getCurrentWebViewPackage()?.versionName ?: "?"
+    WebDiag.add("Muat $host (Android System WebView $version)")
+    web.loadUrl(address)
+    return web
+}
 
 /** Lepas WebView dari parent dulu baru di-destroy, supaya tidak ada peringatan "destroy() while attached". */
 fun destroyOverlayWebView(v: WebView) {
