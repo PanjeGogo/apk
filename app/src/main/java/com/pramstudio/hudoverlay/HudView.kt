@@ -118,8 +118,10 @@ fun createOverlayWebView(context: Context, address: String): WebView {
         override fun onPageFinished(view: WebView?, url: String?) {
             WebDiag.add("Selesai dimuat: $host")
             // Periksa isi halaman setelah skrip widget sempat berjalan, dan sekali lagi agak lama kemudian.
-            view?.postDelayed({ probeWebView(view, host) }, 4000)
-            view?.postDelayed({ probeWebView(view, host) }, 15000)
+            if (view != null) {
+                view.postDelayed({ probeWebView(view, host) }, 4000)
+                view.postDelayed({ probeWebView(view, host) }, 15000)
+            }
         }
 
         override fun onReceivedError(
@@ -139,8 +141,9 @@ fun createOverlayWebView(context: Context, address: String): WebView {
             errorResponse: WebResourceResponse?
         ) {
             val main = request?.isForMainFrame == true
+            val kind = if (main) "(halaman)" else "(sub-resource)"
             val path = ((request?.url?.host ?: "?") + (request?.url?.path ?: "")).take(90)
-            WebDiag.add("HTTP ${errorResponse?.statusCode} ${if (main) "(halaman)" else "(sub-resource)"} $path")
+            WebDiag.add("HTTP ${errorResponse?.statusCode} $kind $path")
         }
 
         override fun onReceivedSslError(
