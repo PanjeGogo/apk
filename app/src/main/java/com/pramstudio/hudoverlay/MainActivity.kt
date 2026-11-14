@@ -122,7 +122,7 @@ class MainActivity : ComponentActivity() {
                         onDismissRequest = { showPatchNotes = false },
                         title = {
                             Column {
-                                Text("Overlay aja v2.2.1")
+                                Text("Overlay aja v2.2.2")
                                 Text(
                                     buildAnnotatedString {
                                         append("By: ")
@@ -141,7 +141,18 @@ class MainActivity : ComponentActivity() {
                                     .height(320.dp)
                                     .verticalScroll(rememberScrollState())
                             ) {
-                                Text("VERSI 2.2.1 • TERBARU", fontWeight = FontWeight.Bold)
+                                Text("VERSI 2.2.2 • TERBARU", fontWeight = FontWeight.Bold)
+                                Text(
+                                    "• Suara alert Web Overlay (mis. Saweria) otomatis diputar\n" +
+                                        "• Halaman Web dirender di kanvas selebar 1280 px lalu diskalakan ke ukuran yang diatur; tinggi mengikuti rasio pilihan\n" +
+                                        "• User agent Web Overlay tidak lagi memakai penanda WebView\n" +
+                                        "• Jendela utama overlay memakai akselerasi hardware"
+                                )
+                                Text(
+                                    "VERSI 2.2.1 • SEBELUMNYA",
+                                    modifier = Modifier.padding(top = 16.dp),
+                                    fontWeight = FontWeight.Bold
+                                )
                                 Text(
                                     "• Memutar layar tidak lagi mereset tab, profil, dan Patch Notes\n" +
                                         "• Web Overlay touchable memakai jendela sendiri: sentuhan di luar area web tetap tembus ke game\n" +
@@ -155,7 +166,7 @@ class MainActivity : ComponentActivity() {
                                         "• Warna status bar mengikuti warna aksen"
                                 )
                                 Text(
-                                    "VERSI 2.2.0 • SEBELUMNYA",
+                                    "VERSI 2.2.0",
                                     modifier = Modifier.padding(top = 16.dp),
                                     fontWeight = FontWeight.Bold
                                 )

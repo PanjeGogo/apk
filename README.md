@@ -5,7 +5,7 @@ Aplikasi Android native untuk menampilkan overlay teks, gambar/GIF, dan halaman 
 **Developer:** PanjeGogo  
 **Application ID:** `com.PanjeGoGo.AppOverlay`  
 **Package namespace:** `com.pramstudio.hudoverlay`  
-**Current app version:** `2.2.1` (`versionCode 8`)  
+**Current app version:** `2.2.2` (`versionCode 9`)  
 **Technology:** Kotlin, Jetpack Compose, Android View/WindowManager, MediaPlayer  
 **Minimum Android:** API 28  
 **Target Android:** API 34  
@@ -21,7 +21,9 @@ Aplikasi Android native untuk menampilkan overlay teks, gambar/GIF, dan halaman 
 - Teks: font family (termasuk Sans Serif Bold dan Serif Bold), weight (bobot huruf asli Android), italic, underline, alignment, warna HEX, outline, shadow, opacity, dan ukuran. Teks dapat terdiri dari beberapa baris; alignment berlaku untuk teks multi-baris. Preview editor menampilkan warna, font, bobot, italic, underline, dan alignment; outline dan shadow hanya terlihat di overlay sebenarnya.
 - Gambar/GIF: file dipilih dari perangkat dan disalin ke penyimpanan internal aplikasi. GIF/WebP animasi didukung; preview editor menggunakan frame pertama.
 - Ukuran gambar/GIF menerima input angka desimal tanpa batas maksimum/minimum tetap. Nilai 0 menyembunyikan elemen; ukuran ekstrem dibatasi secara aman saat dirender.
-- WEB: URL, JavaScript aktif, pilihan rasio 16:9, 9:16, 1:1, 4:3, 3:4, dan 21:9, serta pengaturan sentuhan.
+- WEB: URL, JavaScript aktif, pilihan rasio 16:9, 9:16, 1:1, 4:3, 3:4, dan 21:9, ukuran tampil (lebar % dari sisi layar terpendek), serta pengaturan sentuhan.
+- Halaman WEB dirender di kanvas virtual selebar **1280 px CSS** (tinggi mengikuti rasio yang dipilih), lalu diskalakan ke ukuran tampil. Dengan begitu halaman widget (alert, milestone, dll.) mendapat ukuran layar seperti browser source OBS, bukan layar kecil selebar view fisiknya. Ukuran tampil hanya mengubah skala, bukan layout halaman.
+- Suara halaman WEB (mis. alert Saweria) diputar otomatis tanpa perlu sentuhan. User agent WEB tidak membawa penanda WebView (`wv`) supaya widget memperlakukannya seperti Chrome biasa.
 - Overlay utama selalu touch-through agar interaksi diteruskan ke aplikasi/game di bawahnya. WEB yang diatur **Touchable** memakai jendela kecil sendiri seukuran areanya (selalu tampil di atas elemen lain): hanya area web yang menerima sentuhan, area di luarnya tetap tembus ke game.
 
 ### Musik
@@ -31,7 +33,7 @@ Aplikasi Android native untuk menampilkan overlay teks, gambar/GIF, dan halaman 
 - Kontrol musik juga tersedia melalui notifikasi foreground service.
 
 ### Service dan izin Android
-- Overlay ditampilkan melalui foreground service dan WindowManager.
+- Overlay ditampilkan melalui foreground service dan WindowManager (jendela utama memakai akselerasi hardware).
 - Notifikasi menyediakan aksi jeda/lanjut overlay, play/pause musik, dan stop.
 - Aplikasi meminta izin **Display over other apps** dan izin notifikasi pada Android yang membutuhkannya.
 - Patch Notes ditampilkan setiap kali aplikasi dibuka.
@@ -63,7 +65,7 @@ Semua source Kotlin utama berada di `app/src/main/java/com/pramstudio/hudoverlay
 |---|---|
 | `MainActivity.kt` | Activity utama, top bar, tab, izin, dan Patch Notes |
 | `EditorScreen.kt` | Editor Compose untuk teks, gambar/GIF, WEB, ukuran, opacity, dan layer |
-| `HudView.kt` | Rendering elemen overlay pada window, serta helper WebView overlay |
+| `HudView.kt` | Rendering elemen overlay pada window, serta helper WebView overlay (kanvas virtual 1280 px, user agent, audio) |
 | `OverlayService.kt` | Foreground service, WindowManager (jendela utama + jendela WEB touchable), notifikasi, dan sinkronisasi perubahan |
 | `Model.kt` | Model HUD, penyimpanan layout, playlist, dan serialisasi data |
 | `Media.kt` | Pemilihan/pemrosesan media dan aset |
@@ -86,7 +88,7 @@ GitHub Actions workflow bernama **Android APK Build** berjalan saat push ke `mai
 4. Unduh artifact `hud-overlay-debug-apk`.
 5. Ekstrak ZIP dan install `app-debug.apk`.
 
-**Tanda tangan APK:** workflow memakai debug keystore tetap dari `.github/debug-keystore.b64` (keystore debug standar, bukan rahasia), sehingga setiap APK hasil CI memiliki tanda tangan yang sama dan bisa menimpa versi yang sudah terpasang tanpa uninstall. APK yang dibangun sebelum keystore ini ditambahkan (versi 2.2.0 dan sebelumnya) memakai kunci acak yang berbeda, jadi perpindahan pertama ke 2.2.1 memerlukan uninstall sekali (export konfigurasi `.panje` dulu). Untuk rilis publik, ganti dengan keystore rilis privat lewat GitHub Secrets.
+**Tanda tangan APK:** `app/build.gradle.kts` memakai debug keystore tetap dari `.github/debug-keystore.b64` (keystore debug standar, bukan rahasia), sehingga setiap APK hasil build memiliki tanda tangan yang sama dan bisa menimpa versi yang sudah terpasang tanpa uninstall. APK yang dibangun sebelum keystore ini ditambahkan (versi 2.2.0 dan sebelumnya) memakai kunci acak yang berbeda, jadi perpindahan pertama ke 2.2.1 atau lebih baru memerlukan uninstall sekali (export konfigurasi `.panje` dulu). Untuk rilis publik, ganti dengan keystore rilis privat lewat GitHub Secrets.
 
 Build lokal:
 
@@ -94,7 +96,7 @@ Build lokal:
 gradle assembleDebug
 ```
 
-Output: `app/build/outputs/apk/debug/app-debug.apk`. Build lokal memakai debug keystore mesin Anda sendiri, jadi tanda tangannya berbeda dari APK hasil CI.
+Output: `app/build/outputs/apk/debug/app-debug.apk`. Build lokal juga memakai keystore tetap di atas.
 
 ## Roadmap
 
@@ -105,4 +107,5 @@ Lihat [ROADMAP.md](ROADMAP.md) untuk status fitur, prioritas stabilisasi, dan re
 - Android 12+ membatasi touch-through overlay berdasarkan opacity window; jendela utama memakai opacity 0.8 sehingga seluruh overlay teks/gambar maksimal 80% pekat di Android 12+.
 - Perilaku overlay, cutout, izin, playback, dan visibilitas saat screen recording dapat berbeda menurut versi Android serta vendor perangkat.
 - Audio playback capture dan visibilitas overlay dalam hasil capture bergantung pada kebijakan aplikasi perekam/streaming dan versi Android.
+- Kualitas dan performa halaman WEB bergantung pada versi Android System WebView di perangkat; perbarui WebView jika widget tidak tampil.
 - Uji pada perangkat target sebelum dipakai untuk live streaming.

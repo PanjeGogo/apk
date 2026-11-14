@@ -25,6 +25,29 @@ import kotlin.math.roundToInt
 /** Batas aman ukuran satu elemen (px) supaya nilai ekstrem tidak merusak render. */
 private const val MAX_VIEW_PX = 16384
 
+/** Lebar kanvas virtual halaman Web Overlay dalam px CSS, seperti browser source OBS. */
+const val WEB_VIRTUAL_WIDTH_CSS = 1280
+
+/**
+ * Ukuran WebView di kanvas virtual (px perangkat) dan skala untuk mengecilkannya ke lebar tampil.
+ * Halaman selalu merasa berada di layar selebar 1280 px CSS; rasio menentukan tingginya.
+ */
+class WebCanvas(val widthPx: Int, val heightPx: Int, val scale: Float)
+
+fun webCanvasFor(density: Float, ratio: Float, targetWidthPx: Float): WebCanvas {
+    val w = (WEB_VIRTUAL_WIDTH_CSS * density).roundToInt().coerceIn(1, MAX_VIEW_PX)
+    val h = (w / ratio).roundToInt().coerceIn(1, MAX_VIEW_PX)
+    return WebCanvas(w, h, targetWidthPx.coerceAtLeast(1f) / w)
+}
+
+/** Kecilkan view dari pojok kiri atas, supaya posisi kiri atas elemen tetap di x,y. */
+fun applyWebScale(v: View, scale: Float) {
+    v.pivotX = 0f
+    v.pivotY = 0f
+    if (v.scaleX != scale) v.scaleX = scale
+    if (v.scaleY != scale) v.scaleY = scale
+}
+
 /** Alamat web yang valid (http/https), atau null kalau URL tidak bisa dipakai. */
 fun normalizeWebUrl(value: String): String? {
     val raw = value.trim()
@@ -53,6 +76,13 @@ fun createOverlayWebView(context: Context, address: String): WebView =
         settings.domStorageEnabled = true
         settings.loadsImagesAutomatically = true
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        // Suara alert (notifikasi donasi, TTS) harus bisa diputar otomatis: overlay ini tidak pernah
+        // disentuh, jadi tanpa ini WebView memblokir semua audio.
+        settings.mediaPlaybackRequiresUserGesture = false
+        // Buang penanda WebView dari user agent supaya widget memperlakukannya seperti Chrome biasa.
+        settings.userAgentString = settings.userAgentString
+            .replace("; wv", "")
+            .replace("Version/4.0 ", "")
         loadUrl(address)
     }
 
@@ -69,6 +99,7 @@ fun destroyOverlayWebView(v: WebView) {
  * Menggambar elemen overlay (teks dan gambar/GIF, serta Web Overlay yang tidak touchable)
  * dengan posisi pecahan layar. Web Overlay yang touchable memakai jendela kecil sendiri
  * (lihat OverlayService) supaya sentuhan di luar area web tetap tembus ke game.
+ * Halaman web dirender di kanvas virtual 1280 px CSS lalu diskalakan ke ukuran yang diatur.
  * View dipakai ulang antar update supaya animasi GIF tidak restart tiap kali editor menyimpan.
  */
 class HudView(context: Context) : FrameLayout(context) {
@@ -238,12 +269,18 @@ class HudView(context: Context) : FrameLayout(context) {
                 v.setTextSize(TypedValue.COMPLEX_UNIT_PX, e.item.size * minSide)
                 v.measure(MeasureSpec.UNSPECIFIED, MeasureSpec.UNSPECIFIED)
             } else if (v is WebView) {
-                val tw = (e.item.size * minSide).roundToInt().coerceIn(1, MAX_VIEW_PX)
-                val th = (tw / aspectRatioOf(e.item.webAspectRatio)).roundToInt().coerceIn(1, MAX_VIEW_PX)
-                v.measure(
-                    MeasureSpec.makeMeasureSpec(tw, MeasureSpec.EXACTLY),
-                    MeasureSpec.makeMeasureSpec(th, MeasureSpec.EXACTLY)
+                // Halaman dirender 1280 px CSS lebar (tinggi mengikuti rasio) lalu diskalakan
+                // ke lebar tampil, jadi layout halaman sama seperti di browser source OBS.
+                val canvas = webCanvasFor(
+                    resources.displayMetrics.density,
+                    aspectRatioOf(e.item.webAspectRatio),
+                    e.item.size * minSide
                 )
+                v.measure(
+                    MeasureSpec.makeMeasureSpec(canvas.widthPx, MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(canvas.heightPx, MeasureSpec.EXACTLY)
+                )
+                applyWebScale(v, canvas.scale)
             } else if (v is ImageView) {
                 val d = v.drawable
                 val iw = d?.intrinsicWidth ?: 0

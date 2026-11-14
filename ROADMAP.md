@@ -8,7 +8,7 @@ Dokumen ini adalah acuan roadmap utama proyek Overlay aja. Status fitur menggamb
 - Developer: PanjeGogo
 - Application ID: `com.PanjeGoGo.AppOverlay`
 - Namespace: `com.pramstudio.hudoverlay`
-- Versi aplikasi saat ini: `2.2.1` (versionCode 8)
+- Versi aplikasi saat ini: `2.2.2` (versionCode 9)
 - Bahasa/platform: Kotlin / Android
 - UI: Jetpack Compose
 - Overlay: Android WindowManager + foreground service
@@ -35,11 +35,15 @@ Dokumen ini adalah acuan roadmap utama proyek Overlay aja. Status fitur menggamb
 | Editor gambar | Input ukuran desimal tanpa batas maksimum/minimum tetap | Selesai di source; uji ekstrem di perangkat |
 | WEB overlay | URL dan JavaScript aktif | Selesai |
 | WEB overlay | Rasio 16:9, 9:16, 1:1, 4:3, 3:4, 21:9 | Selesai |
+| WEB overlay | Kanvas virtual 1280 px CSS (tinggi mengikuti rasio) diskalakan ke ukuran tampil | Selesai di source; uji dengan SociaBuzz dan Saweria |
+| WEB overlay | Audio autoplay (suara alert diputar tanpa sentuhan) | Selesai di source; uji suara Saweria |
+| WEB overlay | User agent tanpa penanda WebView | Selesai di source; uji dengan SociaBuzz |
 | WEB overlay | Touchable memakai jendela sendiri; area di luar web tetap tembus ke game | Selesai di source; uji per perangkat |
 | Musik | Playlist multi-lagu, play/pause, next/previous | Selesai |
 | Musik | Volume dan auto-repeat | Selesai |
 | Service | Foreground notification dan aksi kontrol | Selesai |
 | Service | Update overlay langsung dari perubahan editor | Selesai |
+| Service | Jendela utama memakai akselerasi hardware | Selesai di source |
 | Project | Export/import seluruh konfigurasi Portrait dan Landscape sebagai `.panje` | Selesai di source |
 | Project | Aset gambar/GIF ikut disimpan dalam `.panje` | Selesai di source |
 | Project | Playlist musik tidak ikut disimpan dalam `.panje` | Sesuai keputusan desain |
@@ -47,7 +51,7 @@ Dokumen ini adalah acuan roadmap utama proyek Overlay aja. Status fitur menggamb
 | Project | Import membersihkan gambar lama; pesan jelas jika memori tidak cukup | Selesai di source |
 | Penyimpanan | Elemen layout yang rusak dilewati satu per satu (tidak mereset seluruh layout) | Selesai di source |
 | CI | Build debug APK melalui GitHub Actions | Workflow tersedia; periksa status run terbaru |
-| CI | Debug keystore tetap sehingga update APK tidak perlu uninstall | Selesai di source; uji install di atas versi sebelumnya |
+| CI | Debug keystore tetap (dikonfigurasi di Gradle) sehingga update APK tidak perlu uninstall | Selesai di source; uji install di atas versi sebelumnya |
 
 ## Spesifikasi arsip `.panje`
 
@@ -67,14 +71,17 @@ Implementasi saat ini memakai AES-256-GCM dengan kunci yang ditanam di aplikasi.
 
 ### P0 — Stabilitas dan verifikasi perangkat
 
-- [ ] Uninstall APK lama sekali (export `.panje` dulu), lalu install APK 2.2.1 hasil workflow; pastikan build berikutnya bisa di-install di atasnya tanpa uninstall.
+- [ ] Uninstall APK lama sekali (export `.panje` dulu), lalu install APK hasil workflow terbaru; pastikan build berikutnya bisa di-install di atasnya tanpa uninstall.
 - [ ] Install APK hasil workflow terbaru pada perangkat Android target.
 - [ ] Uji izin overlay, mulai/jeda/lanjut/stop, dan notifikasi.
 - [ ] Uji orientasi Portrait ↔ Landscape ketika overlay aktif, dan pastikan tab/profil editor tidak ter-reset saat layar diputar.
 - [ ] Uji tambah/edit/hapus teks dan gambar/GIF; pastikan perubahan langsung terlihat.
 - [ ] Uji teks: Serif Bold/Sans Serif Bold, weight Medium/Extra Bold, teks multi-baris dengan alignment, outline, shadow (dengan dan tanpa blur), dan pastikan outline tidak menguras baterai/CPU.
 - [ ] Uji ukuran gambar/GIF: 0, angka desimal, nilai besar, dan nilai ekstrem; pastikan editor tidak crash dan perilaku rendering dapat dipahami.
-- [ ] Uji WEB: setiap rasio, URL, JavaScript, transparansi, dan mode sentuhan; pada mode Touchable pastikan hanya area web yang menerima sentuhan, game di luar area tetap bisa disentuh, dan posisi/ukuran jendela web sama dengan preview setelah rotasi.
+- [ ] Uji WEB: setiap rasio, URL, JavaScript, transparansi, dan mode sentuhan; pastikan tampilan sama dengan browser source OBS (halaman dirender 1280 px CSS lalu diskalakan) untuk alert Saweria dan SociaBuzz (Alert, Milestone).
+- [ ] Uji suara alert WEB (Saweria dan SociaBuzz) pada Test Alert; catat jika suara masih tidak keluar dan di aplikasi streaming mana.
+- [ ] Uji mode Touchable: hanya area web yang menerima sentuhan, game di luar area tetap bisa disentuh, dan posisi/ukuran jendela web sama dengan preview setelah rotasi.
+- [ ] Uji performa dan penggunaan memori Web Overlay (kanvas virtual 1280 px dikecilkan) pada perangkat target, terutama dengan beberapa Web Overlay aktif.
 - [ ] Uji playlist: izin URI, next/previous, repeat, volume, dan perilaku saat service dihentikan.
 - [ ] Uji export/import `.panje` dengan layout Portrait + Landscape dan beberapa aset gambar/GIF.
 - [ ] Uji file rusak, versi tidak didukung, aset hilang, dan arsip terlalu besar; konfigurasi lama harus tetap aman.
