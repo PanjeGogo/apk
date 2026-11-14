@@ -17,8 +17,10 @@ import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import android.webkit.WebStorage
 import android.webkit.WebView
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -102,6 +104,8 @@ class OverlayService : Service() {
         createChannel()
         music = MusicPlayer(this) { updateNotification() }
         startForegroundCompat()
+        // Setiap kali overlay dimulai: bersihkan cache halaman web dulu, baru muat konfigurasi dan overlay.
+        refreshWebCache()
         addOverlay()
         HudStore.prefs(this).registerOnSharedPreferenceChangeListener(prefListener)
     }
@@ -142,6 +146,27 @@ class OverlayService : Service() {
         hud = null
         _running.value = false
         super.onDestroy()
+    }
+
+    /**
+     * Bersihkan cache HTTP dan penyimpanan lokal (localStorage, IndexedDB) halaman web, supaya widget
+     * alert tidak memakai versi halaman atau skrip lama. Cookie tidak disentuh. Hanya dijalankan
+     * kalau ada Web Overlay di konfigurasi.
+     */
+    private fun refreshWebCache() {
+        val layout = HudStore.load(this)
+        val hasWeb = (layout.portrait + layout.landscape).any { it.type == ItemType.WEB }
+        if (!hasWeb) return
+        try {
+            val temp = WebView(this)
+            temp.clearCache(true)
+            temp.destroy()
+            WebStorage.getInstance().deleteAllData()
+            WebDiag.add("Cache dan penyimpanan lokal Web Overlay dibersihkan saat Mulai")
+            Toast.makeText(this, "Menyegarkan cache Web Overlay…", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            WebDiag.add("Gagal membersihkan cache Web: ${e.message}")
+        }
     }
 
     private fun addOverlay() {
